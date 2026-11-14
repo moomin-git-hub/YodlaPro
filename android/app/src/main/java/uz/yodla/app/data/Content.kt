@@ -52,3 +52,11 @@ fun htmlToPlain(s: String): String = if (!isHtml(s)) s else s
     .replace(Regex("(?i)<(br|/p|/div|/li|/h\\d)[^>]*>"), " ").replace(Regex("<[^>]+>"), "")
     .replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
     .replace(Regex("\\s+"), " ").trim()
+
+/** What the learner should type for this card (type-answer mode); blank = typing not offered. */
+fun Card.typedTarget(): String = when (type) {
+    CardType.CLOZE -> Cloze.regex.findAll(front).filter { it.groupValues[1].toInt() == cloze().c }.joinToString(" ") { htmlToPlain(it.groupValues[2]) }
+    CardType.REVERSE -> htmlToPlain(front)
+    CardType.OCCLUSION -> ""
+    else -> htmlToPlain(back)
+}.trim()

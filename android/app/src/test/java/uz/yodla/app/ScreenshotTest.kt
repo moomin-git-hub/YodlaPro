@@ -12,6 +12,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performTextInput
 import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
@@ -106,9 +109,19 @@ class ScreenshotTest {
     @Test fun studyFront() = shot("05_study_front") { StudyScreen(rememberNavController(), deckId, false) }
     @Test fun studyBack() {
         shot("06_study_back_tmp") { StudyScreen(rememberNavController(), deckId, false) }
-        rule.onNodeWithText(rule.activity.getString(R.string.showAnswer)).performClick()
+        rule.onNodeWithText(rule.activity.getString(R.string.tapToShow)).performClick()
         rule.mainClock.advanceTimeBy(800)
         rule.onRoot().captureRoboImage("../screenshots/06_study_back.png")
+    }
+    @Test fun studyTyped() {
+        shot("06b_study_type_tmp") { StudyScreen(rememberNavController(), deckId, false) }
+        rule.onNodeWithContentDescription(rule.activity.getString(R.string.typeAnswer)).performClick()
+        rule.mainClock.advanceTimeBy(300)
+        rule.onRoot().captureRoboImage("../screenshots/06b_study_typing.png")
+        rule.onNode(hasSetTextAction()).performTextInput("wrnog")
+        rule.onNodeWithContentDescription(rule.activity.getString(R.string.checkAnswer)).performClick()
+        rule.mainClock.advanceTimeBy(800)
+        rule.onRoot().captureRoboImage("../screenshots/06c_study_typed_result.png")
     }
     @Test fun clozeEditor() = shot("07_cloze_editor") { CardEditScreen(rememberNavController(), "new", deckId, CardType.CLOZE) }
     @Test fun occlusionEditor() = shot("08_occlusion_editor") { CardEditScreen(rememberNavController(), "new", occDeck, CardType.OCCLUSION) }

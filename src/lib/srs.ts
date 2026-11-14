@@ -99,6 +99,12 @@ export function fuzz(days: number, seed: string, maxI: number) {
 }
 
 // ---------------- scheduler ----------------
+/**
+ * FSRS learning phase (Noji-style, one pass): Again → 1m, Hard → 15m, Good/Easy → leaves learning.
+ * A brand-new word graduates conservatively to 1d (Good) / 4d (Easy); from then on FSRS stability decides.
+ */
+export const FSRS_AGAIN_MIN = 1, FSRS_HARD_MIN = 15, FIRST_GOOD_DAYS = 1, FIRST_EASY_DAYS = 4;
+
 export interface Scheduled {
   status: Card['status'];
   step: number;
@@ -170,7 +176,16 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
   // stability the card would have if the answer were Good (used to keep Easy > Good when graduating)
   const goodS = () => (card.stability && card.stability > 0 && card.difficulty ? fsrsUpdate(card.stability, card.difficulty, elapsed, 3).s : card.status === 'review' && card.interval > 0 ? s : fsrs.initS(3));
 
-  if (inLearning || inRelearning) {
+  if ((inLearning || inRelearning) && algo === 'fsrs') {
+    const lst = inRelearning ? 'relearning' : 'learning';
+    if (rating === 1) { step = 0; status = lst; due = now + FSRS_AGAIN_MIN * MIN; }
+    else if (rating === 2) { step = 0; status = lst; due = now + FSRS_HARD_MIN * MIN; }
+    else {
+      const g = rating as 3 | 4;
+      interval = inRelearning ? fuzz(graduate(g), seed + 'G', maxI) : Math.min(graduate(g), g === 4 ? FIRST_EASY_DAYS : FIRST_GOOD_DAYS, maxI);
+      status = 'review'; step = 0; due = now + interval * DAY;
+    }
+  } else if (inLearning || inRelearning) {
     if (rating === 1) { step = 0; status = inRelearning ? 'relearning' : 'learning'; due = now + st[0] * MIN; }
     else if (rating === 2) { status = inRelearning ? 'relearning' : 'learning'; due = now + hardDelay(st, step) * MIN; }
     else if (rating === 3 && step + 1 < st.length) { step += 1; status = inRelearning ? 'relearning' : 'learning'; due = now + st[step] * MIN; }
@@ -192,7 +207,8 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
       lapses += 1;
       if (algo === 'sm2') { ease = Math.max(1.3, ease - 0.2); interval = Math.max(1, Math.round(interval * cfg.lapseFactor)); }
       else interval = clamp(Math.round(fsrs.intervalFor(s, cfg.desiredRetention)), 1, maxI);
-      if (cfg.relearningSteps.length) { status = 'relearning'; step = 0; due = now + relearn[0] * MIN; }
+      if (algo === 'fsrs') { status = 'relearning'; step = 0; due = now + FSRS_AGAIN_MIN * MIN; }
+      else if (cfg.relearningSteps.length) { status = 'relearning'; step = 0; due = now + relearn[0] * MIN; }
       else { status = 'review'; due = now + interval * DAY; }
     } else {
       let h: number, g: number, e: number;
@@ -237,8 +253,8 @@ export function formatDuration(ms: number) {
   const h = Math.round(m / 60);
   if (h < 24) return `${h}h`;
   const d = Math.round(ms / DAY);
-  if (d < 31) return `${d}d`;
-  const mo = Math.round(d / 30);
+  if (d < 60) return `${d}d`; // days up to 2 months so Hard/Good/Easy never read the same
+  const mo = Math.round(d / 3) / 10; // months, one decimal
   if (mo < 12) return `${mo}mo`;
   return `${(d / 365).toFixed(1)}y`;
 }

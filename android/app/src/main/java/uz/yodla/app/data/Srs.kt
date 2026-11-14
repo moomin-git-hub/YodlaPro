@@ -137,6 +137,12 @@ object Srs {
     private fun r2(x: Double) = jsRound(x * 100) / 100.0
     private fun r4(x: Double) = jsRound(x * 10000) / 10000.0
 
+    /**
+     * FSRS learning phase (Noji-style, one pass): Again → 1m, Hard → 15m, Good/Easy → leaves learning.
+     * A brand-new word graduates conservatively to 1d (Good) / 4d (Easy); from then on FSRS stability decides.
+     */
+    const val FSRS_AGAIN_MIN = 1.0; const val FSRS_HARD_MIN = 15.0; const val FIRST_GOOD_DAYS = 1.0; const val FIRST_EASY_DAYS = 4.0
+
     fun schedule(card: Card, rating: Int, algo: String, cfg: SrsConfig, now: Long = System.currentTimeMillis()): Scheduled {
         val reps = card.reps + 1
         // Fast review: no schedule — the card keeps its state (so switching back to FSRS/SM-2 continues where it was).
@@ -177,7 +183,18 @@ object Srs {
             return (if (g == 4) cfg.easyDays else cfg.graduatingDays).coerceIn(1.0, maxI)
         }
 
-        if (inLearning || inRelearning) {
+        if ((inLearning || inRelearning) && algo == Algo.FSRS) {
+            val lStatus = if (inRelearning) Status.RELEARNING else Status.LEARNING
+            when (rating) {
+                1 -> { step = 0; status = lStatus; due = now + (FSRS_AGAIN_MIN * MIN_MS).roundToLong() }
+                2 -> { step = 0; status = lStatus; due = now + (FSRS_HARD_MIN * MIN_MS).roundToLong() }
+                else -> {
+                    interval = if (inRelearning) fuzz(graduate(rating), seed + "G", maxI)
+                    else minOf(graduate(rating), if (rating == 4) FIRST_EASY_DAYS else FIRST_GOOD_DAYS, maxI)
+                    status = Status.REVIEW; step = 0; due = now + (interval * DAY_MS).roundToLong()
+                }
+            }
+        } else if (inLearning || inRelearning) {
             val lStatus = if (inRelearning) Status.RELEARNING else Status.LEARNING
             when {
                 rating == 1 -> { step = 0; status = lStatus; due = now + (st[0] * MIN_MS).roundToLong() }
@@ -198,7 +215,8 @@ object Srs {
             lapses += 1
             if (algo == Algo.SM2) { ease = max(1.3, ease - 0.2); interval = max(1.0, jsRound(interval * cfg.lapseFactor).toDouble()) }
             else interval = jsRound(Fsrs.intervalFor(s, cfg.desiredRetention)).toDouble().coerceIn(1.0, maxI)
-            if (cfg.relearningSteps.isNotEmpty()) { status = Status.RELEARNING; step = 0; due = now + (relearn[0] * MIN_MS).roundToLong() }
+            if (algo == Algo.FSRS) { status = Status.RELEARNING; step = 0; due = now + (FSRS_AGAIN_MIN * MIN_MS).roundToLong() }
+            else if (cfg.relearningSteps.isNotEmpty()) { status = Status.RELEARNING; step = 0; due = now + (relearn[0] * MIN_MS).roundToLong() }
             else { status = Status.REVIEW; due = now + (interval * DAY_MS).roundToLong() }
         } else {
             val h: Double; val g: Double; val e: Double
@@ -232,10 +250,10 @@ object Srs {
         val h = (m / 60.0).roundToInt()
         if (h < 24) return "${h}h"
         val d = (ms / DAY_MS.toDouble()).roundToInt()
-        if (d < 31) return "${d}d"
-        val mo = (d / 30.0).roundToInt()
-        if (mo < 12) return "${mo}mo"
-        return "%.1fy".format(d / 365.0)
+        if (d < 60) return "${d}d" // days up to 2 months so Hard/Good/Easy never read the same
+        val mo = (d / 3.0).roundToInt() / 10.0 // months, one decimal
+        if (mo < 12) return (if (mo % 1.0 == 0.0) "${mo.toInt()}" else "$mo") + "mo"
+        return "%.1fy".format(java.util.Locale.US, d / 365.0)
     }
 
     fun startOfDay(ts: Long): Long = Calendar.getInstance().apply {

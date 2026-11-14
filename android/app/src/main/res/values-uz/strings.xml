@@ -42,6 +42,8 @@
     <string name="allCaughtUp">Hammasi takrorlandi!</string>
     <string name="allCaughtUpSub">Hozircha takrorlanadigan karta yo\'q. Keyinroq qayting yoki yangi narsa o\'rganing.</string>
     <string name="alsoReversed">Teskari kartalar (javob → savol ham)</string>
+    <string name="answerCorrect">To‘g‘ri!</string>
+    <string name="answerWrong">Unchalik emas</string>
     <string name="appTagline">O\'rgangan hamma narsangizni eslab qoling</string>
     <string name="appearance">Ko\'rinish</string>
     <string name="archiveDeck">Arxivlash</string>
@@ -84,6 +86,7 @@
     <string name="category">Kategoriya</string>
     <string name="changeImage">Rasmni almashtirish</string>
     <string name="changePassword">Parolni o\'zgartirish</string>
+    <string name="checkAnswer">Tekshirish</string>
     <string name="chooseAlgorithm">O\'rganish algoritmini tanlang</string>
     <string name="chooseDeck">Deskni tanlang</string>
     <string name="chooseFile">Fayl tanlash</string>
@@ -172,6 +175,7 @@
     <string name="extractedFromFile">%1$s ta belgi ajratildi</string>
     <string name="featured">Tanlangan</string>
     <string name="finishSession">Tugatish</string>
+    <string name="flipCards">Karta aylanishi</string>
     <string name="folder">Papka</string>
     <string name="folderName">Papka nomi</string>
     <string name="folderSettings">Papka sozlamalari</string>
@@ -326,7 +330,6 @@
     <string name="recommended_">Tavsiya</string>
     <string name="regular">Oddiy</string>
     <string name="relearningSteps">Qayta o\'rganish qadamlari (daqiqa)</string>
-    <string name="remaining">%1$s ta qoldi</string>
     <string name="reminderTime">Eslatma vaqti</string>
     <string name="reminders">Kunlik eslatma</string>
     <string name="removeImage">Olib tashlash</string>
@@ -370,7 +373,6 @@
     <string name="shareToExplore">Kashf etishga e\'lon qilish</string>
     <string name="shortcuts">Klaviatura tugmalari</string>
     <string name="shortcutsAndroid">Klaviatura: Space — aylantirish · 1–4 — baho · Z — qaytarish · B — saqlash · D — qiyin · S — o\'qish · Esc — chiqish</string>
-    <string name="showAnswer">Javobni ko\'rsatish</string>
     <string name="shuffle">Aralashtirish</string>
     <string name="signIn">Kirish</string>
     <string name="signOut">Chiqish</string>
@@ -399,7 +401,7 @@
     <string name="synced">Hammasi sinxronlandi</string>
     <string name="system">Tizim</string>
     <string name="tapToFlip">Aylantirish uchun bosing</string>
-    <string name="tapToReveal">Javobni ko\'rish uchun bosing</string>
+    <string name="tapToShow">Javobni ko‘rish</string>
     <string name="textTooShort">Kamida 20 ta belgi kiriting</string>
     <string name="theme">Mavzu</string>
     <string name="time">Vaqt</string>
@@ -412,6 +414,7 @@
     <string name="totalReviews">Jami takrorlash</string>
     <string name="totalStudied">O\'rganilgan kartalar</string>
     <string name="totalTime">Umumiy vaqt</string>
+    <string name="typeAnswer">Javobni yozing</string>
     <string name="typeBasic">Oddiy</string>
     <string name="typeToSearch">Barcha kartalaringiz bo\'yicha qidirish uchun yozing</string>
     <string name="unarchive">Arxivdan chiqarish</string>

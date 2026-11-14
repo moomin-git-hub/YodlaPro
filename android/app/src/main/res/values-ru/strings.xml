@@ -42,6 +42,8 @@
     <string name="allCaughtUp">Всё повторено!</string>
     <string name="allCaughtUpSub">Сейчас нет карточек к повторению. Вернитесь позже или изучите что-то новое.</string>
     <string name="alsoReversed">Обратные карточки (ответ → вопрос)</string>
+    <string name="answerCorrect">Верно!</string>
+    <string name="answerWrong">Не совсем</string>
     <string name="appTagline">Запоминайте всё, что изучаете</string>
     <string name="appearance">Оформление</string>
     <string name="archiveDeck">В архив</string>
@@ -84,6 +86,7 @@
     <string name="category">Категория</string>
     <string name="changeImage">Сменить фото</string>
     <string name="changePassword">Сменить пароль</string>
+    <string name="checkAnswer">Проверить</string>
     <string name="chooseAlgorithm">Выберите алгоритм обучения</string>
     <string name="chooseDeck">Выберите колоду</string>
     <string name="chooseFile">Выбрать файл</string>
@@ -172,6 +175,7 @@
     <string name="extractedFromFile">Извлечено символов: %1$s</string>
     <string name="featured">Избранные</string>
     <string name="finishSession">Завершить</string>
+    <string name="flipCards">Анимация переворота</string>
     <string name="folder">Папка</string>
     <string name="folderName">Название папки</string>
     <string name="folderSettings">Настройки папки</string>
@@ -326,7 +330,6 @@
     <string name="recommended_">Рекомендуем</string>
     <string name="regular">Обычно</string>
     <string name="relearningSteps">Шаги переучивания (минуты)</string>
-    <string name="remaining">Осталось %1$s</string>
     <string name="reminderTime">Время напоминания</string>
     <string name="reminders">Ежедневное напоминание</string>
     <string name="removeImage">Убрать</string>
@@ -370,7 +373,6 @@
     <string name="shareToExplore">Опубликовать в Обзоре</string>
     <string name="shortcuts">Горячие клавиши</string>
     <string name="shortcutsAndroid">Клавиатура: Пробел — перевернуть · 1–4 — оценка · Z — отмена · B — закладка · D — трудная · S — озвучить · Esc — выход</string>
-    <string name="showAnswer">Показать ответ</string>
     <string name="shuffle">Перемешать</string>
     <string name="signIn">Войти</string>
     <string name="signOut">Выйти</string>
@@ -399,7 +401,7 @@
     <string name="synced">Всё синхронизировано</string>
     <string name="system">Системная</string>
     <string name="tapToFlip">Нажмите, чтобы перевернуть</string>
-    <string name="tapToReveal">Нажмите, чтобы увидеть ответ</string>
+    <string name="tapToShow">Показать ответ</string>
     <string name="textTooShort">Введите минимум 20 символов</string>
     <string name="theme">Тема</string>
     <string name="time">Время</string>
@@ -412,6 +414,7 @@
     <string name="totalReviews">Всего повторений</string>
     <string name="totalStudied">Изучено карточек</string>
     <string name="totalTime">Всего времени</string>
+    <string name="typeAnswer">Введите ответ</string>
     <string name="typeBasic">Обычная</string>
     <string name="typeToSearch">Начните вводить для поиска по всем карточкам</string>
     <string name="unarchive">Вернуть из архива</string>

@@ -43,6 +43,8 @@
     <string name="allCaughtUp">All caught up!</string>
     <string name="allCaughtUpSub">No cards are due right now. Come back later or learn something new.</string>
     <string name="alsoReversed">Reverse cards (also ask answer → question)</string>
+    <string name="answerCorrect">Correct!</string>
+    <string name="answerWrong">Not quite</string>
     <string name="appTagline">Remember everything you learn</string>
     <string name="appearance">Appearance</string>
     <string name="archiveDeck">Archive deck</string>
@@ -85,6 +87,7 @@
     <string name="category">Category</string>
     <string name="changeImage">Change image</string>
     <string name="changePassword">Change password</string>
+    <string name="checkAnswer">Check</string>
     <string name="chooseAlgorithm">Choose learning algorithm</string>
     <string name="chooseDeck">Choose deck</string>
     <string name="chooseFile">Choose file</string>
@@ -173,6 +176,7 @@
     <string name="extractedFromFile">Extracted %1$s characters</string>
     <string name="featured">Featured</string>
     <string name="finishSession">Finish</string>
+    <string name="flipCards">Flip animation</string>
     <string name="folder">Folder</string>
     <string name="folderName">Folder name</string>
     <string name="folderSettings">Folder settings</string>
@@ -327,7 +331,6 @@
     <string name="recommended_">Recommended</string>
     <string name="regular">Regular</string>
     <string name="relearningSteps">Relearning steps (minutes)</string>
-    <string name="remaining">%1$s left</string>
     <string name="reminderTime">Reminder time</string>
     <string name="reminders">Daily reminder</string>
     <string name="removeImage">Remove</string>
@@ -371,7 +374,6 @@
     <string name="shareToExplore">Publish to Explore</string>
     <string name="shortcuts">Keyboard shortcuts</string>
     <string name="shortcutsAndroid">Hardware keyboard: Space — flip · 1–4 — rate · Z — undo · B — bookmark · D — difficult · S — speak · Esc — exit</string>
-    <string name="showAnswer">Show answer</string>
     <string name="shuffle">Shuffle</string>
     <string name="signIn">Sign in</string>
     <string name="signOut">Sign out</string>
@@ -400,7 +402,7 @@
     <string name="synced">All changes synced</string>
     <string name="system">System</string>
     <string name="tapToFlip">Tap to flip</string>
-    <string name="tapToReveal">Tap to reveal answer</string>
+    <string name="tapToShow">Tap to show answer</string>
     <string name="textTooShort">Please enter at least 20 characters</string>
     <string name="theme">Theme</string>
     <string name="time">Time</string>
@@ -413,6 +415,7 @@
     <string name="totalReviews">Total reviews</string>
     <string name="totalStudied">Cards studied</string>
     <string name="totalTime">Total time</string>
+    <string name="typeAnswer">Type the answer</string>
     <string name="typeBasic">Basic</string>
     <string name="typeToSearch">Type to search across all your cards</string>
     <string name="unarchive">Restore from archive</string>

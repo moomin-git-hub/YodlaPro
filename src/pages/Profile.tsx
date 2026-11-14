@@ -9,7 +9,7 @@ import { Button, Field, PageHeader, Segmented, Sheet, Toggle, confirmDialog, toa
 import { RecoveryCodeScreen } from './Auth';
 import type { Key } from '../lib/i18n';
 import type { Theme } from '../lib/types';
-import { Brain } from 'lucide-react';
+import { Brain, FlipHorizontal2 } from 'lucide-react';
 import { ALGORITHMS } from '../lib/srs';
 
 export function Profile() {
@@ -85,6 +85,7 @@ export function Profile() {
           </select>
         </Row>
         <Row icon={<Shuffle size={18} />} label={t('shuffle')}><Toggle label={t('shuffle')} checked={s.shuffle} onChange={(v) => updateSettings({ shuffle: v })} /></Row>
+        <Row icon={<FlipHorizontal2 size={18} />} label={t('flipCards')}><Toggle label={t('flipCards')} checked={!!s.flipCards} onChange={(v) => updateSettings({ flipCards: v })} /></Row>
         <Row icon={<Volume2 size={18} />} label={t('listen')}><Toggle label={t('listen')} checked={s.tts} onChange={(v) => updateSettings({ tts: v })} /></Row>
       </Group>
 

@@ -4,13 +4,15 @@ import { X, Bookmark, AlertTriangle, Undo2, Volume2, Pencil, Trophy, Target, Clo
 import { useData, getData, review, undoReview, updateCard, addSession, algoFor, presetFor } from '../lib/store';
 import { buildQueue, nextCard, afterAnswer, requeue, queueSize, isEmpty, moreNew, type StudyQueue, type QItem } from '../lib/queue';
 import { CardMenu } from '../components/CardMenu';
+import { checkAnswer, type AnswerDiff } from '../lib/answer';
+import { Keyboard, Check } from 'lucide-react';
 import { useT } from '../lib/i18n';
 import { previewLabel, endOfToday } from '../lib/srs';
 import { fmtTime } from '../lib/stats';
 import { Button, IconButton, ProgressBar, Ring } from '../components/ui';
 import { cx } from '../lib/util';
 import { RichView } from '../components/RichEditor';
-import { clozeHtml, clozePlain, plainText } from '../lib/rich';
+import { clozeHtml, clozePlain, plainText, CLOZE } from '../lib/rich';
 import type { Card, Rating } from '../lib/types';
 
 function speak(text: string) {
@@ -36,6 +38,10 @@ export function Study() {
   const [waitUntil, setWaitUntil] = useState<number | null>(null);
   const [finished, setFinished] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [diff, setDiff] = useState<AnswerDiff | null>(null);
+  const [answered, setAnswered] = useState<string[]>([]); // card ids answered this session (done/total counter)
   const [menu, setMenu] = useState(false);
   const [stats, setStats] = useState({ reviewed: 0, correct: 0, done: 0 });
   const [history, setHistory] = useState<Snap[]>([]);
@@ -51,7 +57,7 @@ export function Study() {
     if (n.kind === 'show') { setCurrent(n.item); setQueue(n.queue); setWaitUntil(null); setFinished(false); }
     else if (n.kind === 'wait') { setCurrent(null); setQueue(q); setWaitUntil(n.until); setFinished(false); }
     else { setCurrent(null); setQueue(q); setWaitUntil(null); setFinished(true); }
-    setFlipped(false); shownAt.current = Date.now();
+    setFlipped(false); setTyping(false); setTyped(''); setDiff(null); shownAt.current = Date.now();
   }, []);
   useEffect(() => { if (!empty) advance(queue); /* first card */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -92,6 +98,7 @@ export function Study() {
       if (updated) q = afterAnswer(q, updated, endOfToday());
     }
     setStats((s) => ({ reviewed: s.reviewed + 1, correct: s.correct + (r >= 3 ? 1 : 0), done: s.done + 1 }));
+    setAnswered((a) => [...a, card.id]);
     advance(q);
     setTimeout(() => { busy.current = false; }, 0);
     if (navigator.vibrate) navigator.vibrate(8);
@@ -101,6 +108,7 @@ export function Study() {
     const last = history[history.length - 1];
     if (!last) return;
     if (last.prev) undoReview(last.prev);
+    setAnswered((a) => a.slice(0, -1));
     setHistory((h) => h.slice(0, -1));
     setQueue(last.queue); setCurrent(last.current); setStats(last.stats); setWaitUntil(null); setFinished(false); setFlipped(false);
     saved.current = false;
@@ -110,13 +118,21 @@ export function Study() {
   const rev = card?.cardType === 'reverse';
   const qText = card ? (rev ? card.back : card.front) : '';
   const aText = card ? (rev ? card.front : card.back) : '';
+  const typeTarget = !card ? '' : card.cardType === 'cloze'
+    ? [...card.front.matchAll(CLOZE)].filter((m) => +m[1] === ((() => { try { return JSON.parse(card.extra || '{}').c ?? 1; } catch { return 1; } })())).map((m) => plainText(m[2])).join(' ')
+    : card.cardType === 'occlusion' ? '' : plainText(aText).trim();
+  const reveal = useCallback(() => {
+    if (flipped) return;
+    if (typing || typed.trim()) setDiff(checkAnswer(typed, typeTarget));
+    setTyping(false); setFlipped(true);
+  }, [flipped, typing, typed, typeTarget]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT' || menu) return;
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || menu || typing) return;
       if (e.key === 'Escape') return exit();
       if (done || !card) return;
-      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setFlipped((f) => !f); }
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!flipped) reveal(); else if (data.settings.flipCards) setFlipped(false); }
       else if (['1', '2', '3', '4'].includes(e.key)) rate(Number(e.key) as Rating);
       else if (e.key.toLowerCase() === 'z') undo();
       else if (e.key.toLowerCase() === 'b') updateCard(card.id, { bookmarked: !card.bookmarked });
@@ -125,7 +141,7 @@ export function Study() {
     };
     addEventListener('keydown', h);
     return () => removeEventListener('keydown', h);
-  }, [rate, undo, exit, done, card, flipped, menu, qText, aText]);
+  }, [rate, undo, exit, done, card, flipped, menu, qText, aText, typing, reveal, data.settings.flipCards]);
 
   const algo = item?.mode === 'srs' ? algoFor(cardDeck) : 'fast';
   const now0 = useMemo(() => Date.now(), [card?.id, card?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -194,7 +210,10 @@ export function Study() {
   const faces = card.cardType === 'cloze'
     ? { cloze: true, q: clozeHtml(card.front, clozeIdx, false), a: clozeHtml(card.front, clozeIdx, true) }
     : { cloze: false, q: qText, a: aText };
-  const progress = (stats.done / Math.max(1, stats.done + left)) * 100;
+  const inSession = new Set([...queue.main.map((x) => x.id), ...queue.learn.map((x) => x.id), ...(current ? [current.id] : [])]);
+  const doneCards = new Set(answered.filter((id) => !inSession.has(id))).size, totalCards = doneCards + left;
+  const progress = (doneCards / Math.max(1, totalCards)) * 100;
+  const flipMode = !!data.settings.flipCards;
   const occ = card.cardType === 'occlusion' ? (() => { try { return JSON.parse(card.extra || '{}') as { masks?: { id: string; x: number; y: number; w: number; h: number }[]; t?: string; mode?: string }; } catch { return {}; } })() : null;
   const ratingBtns: { r: Rating; label: string; cls: string }[] = [
     { r: 1, label: t('again'), cls: 'bg-rose-500 shadow-rose-500/30' },
@@ -207,17 +226,21 @@ export function Study() {
     <div className="mx-auto flex h-full max-w-xl flex-col px-4 pb-4 pt-3 safe-bottom sm:pt-6">
       <div className="flex items-center gap-2">
         <IconButton label={t('exitStudy')} onClick={exit}><X size={24} /></IconButton>
-        <div className="flex-1"><ProgressBar value={progress} /><p className="mt-1 truncate text-center text-[11px] font-bold opacity-50">{title} · {t('remaining', { n: left })}</p></div>
-        <IconButton label={t('undo')} onClick={undo} disabled={!history.length} className="disabled:opacity-25"><Undo2 size={20} /></IconButton>
+        <div className="flex flex-1 flex-col items-center gap-1.5">
+          <span className="rounded-full bg-ink-900/[.06] px-3.5 py-0.5 text-sm font-extrabold tabular-nums dark:bg-white/10">{doneCards}/{totalCards}</span>
+          <div className="w-full"><ProgressBar value={progress} /></div>
+          <p className="truncate text-center text-[11px] font-bold opacity-50">{title}</p>
+        </div>
         <IconButton label="Menu" onClick={() => setMenu(true)}><MoreVertical size={20} /></IconButton>
       </div>
       {item?.mode === 'practice' && <p className="mt-2 text-center text-xs font-semibold text-amber-600 dark:text-amber-400">{t('practiceMode')}</p>}
       {item?.mode === 'fast' && <p className="mt-2 text-center text-xs font-semibold text-sky-600 dark:text-sky-400">{t('algoFast')}</p>}
       <CardMenu card={card} data={data} open={menu} onClose={() => setMenu(false)} onGone={() => advance(queue)} onEdit={finish} />
 
+      {flipMode ? (
       <div className={cx('flip relative my-4 flex-1', flipped && 'flipped')} style={{ minHeight: 340 }}>
         <div className="flip-inner h-full">
-          <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) setFlipped(true); }} aria-label={t('tapToReveal')} className="flip-face card-surface flex h-full w-full cursor-pointer flex-col rounded-[32px] p-6 text-left">
+          <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) reveal(); }} aria-label={t('tapToReveal')} className="flip-face card-surface flex h-full w-full cursor-pointer flex-col rounded-[32px] p-6 text-left">
             <CardTop card={card} />
             <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto py-4 text-center">
               {occ ? <><RichView html={card.front} className="mb-3 w-full text-lg font-bold" /><Occlusion image={card.image} occ={occ} revealed={false} /></> : <>
@@ -242,10 +265,43 @@ export function Study() {
         </div>
       </div>
 
-      {!flipped ? (
-        <Button size="lg" block className="h-16 text-lg" onClick={() => setFlipped(true)}>{t('showAnswer')}</Button>
       ) : (
+        <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) reveal(); }} className="card-surface relative my-4 flex min-h-[340px] flex-1 cursor-pointer flex-col overflow-hidden rounded-[32px] p-6 text-left">
+          <CardTop card={card} />
+          {!flipped ? (
+            <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto py-4 text-center">
+              {occ ? <><RichView html={card.front} className="mb-3 w-full text-lg font-bold" /><Occlusion image={card.image} occ={occ} revealed={false} /></> : <>
+                {card.image && <img src={card.image} alt="" className="mb-4 max-h-44 rounded-2xl object-contain" />}
+                <RichView html={faces.q} className="w-full text-[26px] font-extrabold leading-snug" />
+              </>}
+            </div>
+          ) : (
+              <div className="flex flex-1 animate-fade flex-col justify-center overflow-y-auto py-3">
+              {occ ? <Occlusion image={card.image} occ={occ} revealed /> : faces.cloze ? <RichView html={faces.a} className="text-center text-[22px] font-bold leading-snug" /> : <>
+                <RichView html={qText} className="text-center text-base font-semibold opacity-50" />
+                <div className="mx-auto my-4 h-px w-16 bg-ink-900/10 dark:bg-white/10" />
+              </>}
+              {(!(faces.cloze || occ) || card.back) && <RichView html={occ ? card.back : faces.a} className={cx('text-center leading-snug', faces.cloze || occ ? 'mt-4 text-base' : 'text-[24px] font-extrabold text-brand-600 dark:text-brand-300')} />}
+              {card.example && <div className="mt-5 rounded-2xl bg-ink-900/[.04] p-4 text-[15px] italic leading-relaxed dark:bg-white/5">“{card.example}”</div>}
+              {card.explanation && <div className="mt-3 flex gap-2 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:bg-amber-500/10 dark:text-amber-100"><Lightbulb size={18} className="mt-0.5 shrink-0" />{card.explanation}</div>}
+            </div>
+          )}
+        </div>
+      )}
+      {!flipped ? (typing ? (
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); reveal(); }}>
+          <input autoFocus className="input h-14 flex-1 text-lg" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t('typeAnswer')} autoCapitalize="off" autoComplete="off" spellCheck={false} />
+          <button type="submit" aria-label={t('checkAnswer')} className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-500 text-white"><Check size={22} /></button>
+        </form>
+      ) : (
+        <div className="flex items-center gap-2">
+          {typeTarget ? <button aria-label={t('typeAnswer')} onClick={() => setTyping(true)} className="grid h-14 w-14 place-items-center rounded-full bg-brand-500/15 text-brand-600 dark:text-brand-300"><Keyboard size={22} /></button> : <span className="w-14" />}
+          <button onClick={reveal} className="h-16 flex-1 rounded-2xl text-lg font-bold hover:bg-ink-900/5 dark:hover:bg-white/5">{t('tapToShow')}</button>
+          <button aria-label={t('undo')} onClick={undo} disabled={!history.length} className="grid h-14 w-14 place-items-center rounded-full bg-ink-900/[.06] disabled:opacity-30 dark:bg-white/10"><Undo2 size={20} /></button>
+        </div>
+      )) : (
         <div className="animate-fade">
+          {diff && <TypedResult diff={diff} />}
           <p className="mb-2 text-center text-xs font-bold uppercase tracking-wide opacity-45">{t('howWell')}</p>
           <div className="grid grid-cols-4 gap-2">
             {ratingBtns.map((b) => (
@@ -273,6 +329,17 @@ export function Study() {
       </div>
     );
   }
+}
+
+function TypedResult({ diff }: { diff: AnswerDiff }) {
+  const { t } = useT();
+  return (
+    <div className={cx('mb-3 rounded-2xl px-4 py-3', diff.correct ? 'bg-emerald-500/12' : 'bg-rose-500/12')}>
+      <p className={cx('text-sm font-extrabold', diff.correct ? 'text-emerald-600' : 'text-rose-600')}>{t(diff.correct ? 'answerCorrect' : 'answerWrong')}</p>
+      {diff.typed.length > 0 && <p className="text-lg font-bold">{diff.typed.map(([c, ok], i) => <span key={i} className={ok ? 'text-emerald-600' : 'text-rose-600 line-through'}>{c}</span>)}</p>}
+      {!diff.correct && <p className="text-lg">→ {diff.expected.map(([c, ok], i) => <span key={i} className={ok ? '' : 'font-extrabold text-amber-600 underline'}>{c}</span>)}</p>}
+    </div>
+  );
 }
 
 type Occ = { masks?: { id: string; x: number; y: number; w: number; h: number }[]; t?: string; mode?: string };

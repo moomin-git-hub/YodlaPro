@@ -121,6 +121,7 @@ fun ProfileScreen(nav: NavHostController) {
                 scope.launch { repo.updateSettings { it.copy(defaultAlgorithm = a) }; d.decks.forEach { dk -> if (dk.algorithm != a) repo.saveDeck(dk.copy(algorithm = a)) } }
             }, onDismiss = { algoOpen = false })
             SwitchRow(Icons.Rounded.Shuffle, stringResource(R.string.shuffle), s.shuffle) { v -> repo.updateSettings { it.copy(shuffle = v) } }
+            SwitchRow(Icons.Rounded.Flip, stringResource(R.string.flipCards), s.flipCards) { v -> repo.updateSettings { it.copy(flipCards = v) } }
             SwitchRow(Icons.Rounded.VolumeUp, stringResource(R.string.listen), s.tts) { v -> repo.updateSettings { it.copy(tts = v) } }
             SwitchRow(Icons.Rounded.PlayCircle, stringResource(R.string.autoplayAudio), s.ttsAutoplay) { v -> repo.updateSettings { it.copy(ttsAutoplay = v) } }
         }

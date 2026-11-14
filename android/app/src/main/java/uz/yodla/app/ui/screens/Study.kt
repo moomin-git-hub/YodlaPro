@@ -4,6 +4,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -67,6 +76,10 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
     var empty by remember { mutableStateOf(queue.isEmpty) }
     var menu by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    val answered = remember { mutableStateListOf<String>() } // card ids answered this session (for done/total)
+    var typing by remember { mutableStateOf(false) }
+    var typed by remember { mutableStateOf("") }
+    var typedDiff by remember { mutableStateOf<AnswerCheck.Diff?>(null) }
     val focus = remember { FocusRequester() }
 
     /** Move to the next card that is really due (learning cards wait for their step time). */
@@ -76,7 +89,7 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
             is Next.Wait -> { current = null; queue = q; waitUntil = n.until; finished = false }
             Next.Done -> { current = null; queue = q; waitUntil = null; finished = true }
         }
-        flipped = false; shownAt = now()
+        flipped = false; shownAt = now(); typed = ""; typedDiff = null
     }
     LaunchedEffect(Unit) { if (current == null && !finished && waitUntil == null) advance(queue) }
 
@@ -90,6 +103,16 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
     }
     val style = deck?.cardStyle() ?: CardStyle()
     val left = queue.size + (if (current != null) 1 else 0)
+    // Noji-style counter: cards finished for this session / all cards in it (a learning card is finished when it graduates)
+    val inSession = remember(queue, current) { (queue.main.map { it.id } + queue.learn.map { it.id } + listOfNotNull(current?.id)).toSet() }
+    val doneCards = answered.distinct().count { it !in inSession }
+    val totalCards = doneCards + left
+    fun reveal() {
+        if (flipped) return
+        val c = card ?: return
+        if (typing || typed.isNotBlank()) typedDiff = AnswerCheck.check(typed, c.typedTarget())
+        typing = false; flipped = true
+    }
 
     fun finish() {
         if (saved || reviewed == 0) return
@@ -132,6 +155,7 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
                 else -> { repo.review(c.id, r, now() - shownAt); repo.dao.card(c.id)?.let { u -> q = q.afterAnswer(u, Srs.endOfToday()) } }
             }
             reviewed++; if (r >= 3) correct++; doneCount++
+            answered += c.id
             advance(q)
             busy = false
         }
@@ -140,15 +164,16 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
         val last = history.removeLastOrNull() ?: return
         scope.launch {
             last.prev?.let { repo.undoReview(it) }
+            answered.removeLastOrNull()
             queue = last.queue; current = last.current; waitUntil = null; finished = false
             reviewed = last.reviewed; correct = last.correct; doneCount = last.done; saved = false; flipped = false; shownAt = now()
         }
     }
 
     val keys = Modifier.focusRequester(focus).focusable().onPreviewKeyEvent { e ->
-        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        if (e.type != KeyEventType.KeyDown || typing) return@onPreviewKeyEvent false // typing an answer: keys go to the text field
         when (e.key) {
-            Key.Spacebar, Key.Enter -> { flipped = !flipped; true }
+            Key.Spacebar, Key.Enter -> { if (!flipped) reveal() else if (d.settings.flipCards) flipped = false; true }
             Key.One, Key.NumPad1 -> { rate(1); true }; Key.Two, Key.NumPad2 -> { rate(2); true }
             Key.Three, Key.NumPad3 -> { rate(3); true }; Key.Four, Key.NumPad4 -> { rate(4); true }
             Key.Z -> { undo(); true }
@@ -182,18 +207,38 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
             card != null && item != null -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(::exit) { Icon(Icons.Rounded.Close, stringResource(R.string.exitStudy)) }
-                    Column(Modifier.weight(1f)) {
-                        YProgress((doneCount * 100f / maxOf(1, doneCount + left)).roundToInt())
-                        Text("$title · ${stringResource(R.string.remaining, left)}", Modifier.fillMaxWidth().padding(top = 4.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("$doneCards/$totalCards", Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 14.dp, vertical = 4.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(6.dp))
+                        YProgress((doneCards * 100f / maxOf(1, totalCards)).roundToInt())
+                        Text(title, Modifier.fillMaxWidth().padding(top = 4.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                     }
-                    IconButton(::undo, enabled = history.isNotEmpty()) { Icon(Icons.Rounded.Undo, stringResource(R.string.undo)) }
                     IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, null) }
                 }
                 if (item.mode == QItem.MODE_PRACTICE) Text(stringResource(R.string.practiceMode), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Amber, style = MaterialTheme.typography.labelMedium)
                 if (item.mode == QItem.MODE_FAST) Text(stringResource(R.string.algoFast), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Sky, style = MaterialTheme.typography.labelMedium)
-                FlipCard(card, deck, flipped, style, Modifier.weight(1f).padding(vertical = 12.dp), onFlip = { flipped = !flipped }, onSwipe = { r -> if (flipped) rate(r) else flipped = true }, nav = nav, finish = ::finish)
-                if (!flipped) PrimaryButton(stringResource(R.string.showAnswer), { flipped = true }, Modifier.fillMaxWidth().height(60.dp))
-                else {
+                FlipCard(card, deck, flipped, style, Modifier.weight(1f).padding(vertical = 12.dp),
+                    onFlip = { if (!flipped) reveal() else if (d.settings.flipCards) flipped = false },
+                    onSwipe = { r -> if (flipped) rate(r) else reveal() }, nav = nav, finish = ::finish)
+                val canType = remember(card.id) { card.typedTarget().isNotBlank() }
+                if (!flipped) {
+                    if (typing) {
+                        val kb = LocalSoftwareKeyboardController.current
+                        val fr = remember { FocusRequester() }
+                        LaunchedEffect(card.id) { fr.requestFocus() }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(typed, { typed = it }, Modifier.weight(1f).focusRequester(fr), placeholder = { Text(stringResource(R.string.typeAnswer)) }, singleLine = true,
+                                shape = RoundedCornerShape(18.dp), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { kb?.hide(); reveal() }))
+                            FilledIconButton({ kb?.hide(); reveal() }, Modifier.size(56.dp)) { Icon(Icons.Rounded.Check, stringResource(R.string.checkAnswer)) }
+                        }
+                    } else Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (canType) FilledTonalIconButton({ typing = true }, Modifier.size(56.dp)) { Icon(Icons.Rounded.Keyboard, stringResource(R.string.typeAnswer)) }
+                        else Spacer(Modifier.size(56.dp))
+                        TextButton(::reveal, Modifier.weight(1f).height(60.dp)) { Text(stringResource(R.string.tapToShow), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+                        FilledTonalIconButton(::undo, Modifier.size(56.dp), enabled = history.isNotEmpty()) { Icon(Icons.Rounded.Undo, stringResource(R.string.undo)) }
+                    }
+                } else {
+                    typedDiff?.let { TypedResult(it) }
                     Text(stringResource(R.string.howWell), Modifier.fillMaxWidth().padding(bottom = 6.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val cardDeck = d.deck(card.deckId)
                     val cfg = remember(card.deckId, d.settings) { repo.presetFor(cardDeck) }
@@ -245,7 +290,8 @@ private fun WaitingScreen(until: Long, count: Int, moreCount: Int, onMore: () ->
 
 @Composable
 private fun FlipCard(card: Card, deck: Deck?, flipped: Boolean, style: CardStyle, modifier: Modifier, onFlip: () -> Unit, onSwipe: (Int) -> Unit, nav: NavHostController, finish: () -> Unit) {
-    val rot by animateFloatAsState(if (flipped) 180f else 0f, tween(420), label = "flip")
+    val flipMode = appData().settings.flipCards
+    val rot by animateFloatAsState(if (flipped && flipMode) 180f else 0f, tween(420), label = "flip")
     val drag = remember(card.id) { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val repo = Graph.repo
@@ -272,9 +318,9 @@ private fun FlipCard(card: Card, deck: Deck?, flipped: Boolean, style: CardStyle
             }
             .graphicsLayer { translationX = drag.value; rotationZ = drag.value / 40f; rotationY = rot; cameraDistance = 14 * density },
     ) {
-        val showBack = rot > 90f
+        val showBack = if (flipMode) rot > 90f else flipped
         Column(
-            Modifier.fillMaxSize().graphicsLayer { if (showBack) rotationY = 180f }.clip(RoundedCornerShape(32.dp)).background(cardBg(style))
+            Modifier.fillMaxSize().graphicsLayer { if (flipMode && showBack) rotationY = 180f }.clip(RoundedCornerShape(32.dp)).background(cardBg(style))
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(32.dp)).clickable(onClick = onFlip).padding(20.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -290,20 +336,35 @@ private fun FlipCard(card: Card, deck: Deck?, flipped: Boolean, style: CardStyle
                 SmallIcon(if (card.bookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, stringResource(R.string.bookmark), if (card.bookmarked) Amber else null) { scope.launch { repo.updateCard(card.id) { it.copy(bookmarked = !it.bookmarked) } } }
                 SmallIcon(Icons.Rounded.Warning, stringResource(R.string.markDifficult), if (card.difficult) Rose else null) { scope.launch { repo.updateCard(card.id) { it.copy(difficult = !it.difficult) } } }
             }
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).animateContentSize(tween(260)).padding(vertical = 12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(Modifier.weight(1f, fill = false))
                 if (card.type == CardType.REVERSE) CardFace(CardType.BASIC, card.back, card.front, card.example, card.explanation, card.image, occ, clozeIdx, showBack, style)
                 else CardFace(card.type, card.front, card.back, card.example, card.explanation, card.image, occ, clozeIdx, showBack, style)
             }
-            if (!showBack) Text(stringResource(R.string.tapToReveal), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            else Text(stringResource(R.string.swipeHint), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (showBack) Text(stringResource(R.string.swipeHint), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (abs(drag.value) > 60f) {
             val good = drag.value > 0
-            val back = rot > 90f
+            val back = flipMode && rot > 90f
             Text(stringResource(if (good) R.string.good else R.string.again), Modifier.align(if (good != back) Alignment.TopStart else Alignment.TopEnd).graphicsLayer { if (back) rotationY = 180f }.padding(24.dp).clip(RoundedCornerShape(12.dp))
                 .background(if (good) Emerald else Rose).padding(horizontal = 14.dp, vertical = 6.dp), color = Color.White, fontWeight = FontWeight.ExtraBold)
         }
+    }
+}
+
+/** Type-answer result: what was typed (wrong letters red) and the answer (missed letters highlighted). */
+@Composable
+private fun TypedResult(diff: AnswerCheck.Diff) {
+    val ok = diff.correct
+    Column(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(18.dp)).background((if (ok) Emerald else Rose).copy(alpha = 0.12f)).padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(stringResource(if (ok) R.string.answerCorrect else R.string.answerWrong), color = if (ok) Emerald else Rose, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelLarge)
+        if (diff.typed.isNotEmpty()) Text(buildAnnotatedString {
+            diff.typed.forEach { (c, good) -> withStyle(if (good) SpanStyle(color = Emerald) else SpanStyle(color = Rose, textDecoration = TextDecoration.LineThrough)) { append(c) } }
+        }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (!ok) Text(buildAnnotatedString {
+            append("→ ")
+            diff.expected.forEach { (c, got) -> withStyle(if (got) SpanStyle() else SpanStyle(color = Amber, textDecoration = TextDecoration.Underline, fontWeight = FontWeight.ExtraBold)) { append(c) } }
+        }, style = MaterialTheme.typography.titleMedium)
     }
 }
 

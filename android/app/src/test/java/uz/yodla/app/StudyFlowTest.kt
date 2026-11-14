@@ -34,8 +34,8 @@ class StudyFlowTest {
         val ordered = repo.data.value.cards.filter { it.deckId == deck.id }.sortedBy { it.createdAt }.take(20).map { it.id }
         assertEquals("shuffle off → deck order", ordered, firstIds)
 
-        // study all 20 (Good) → they are learning, no new room left
-        firstIds.forEach { repo.review(it, 3, 1000) }
+        // study all 20 (Again) → they stay in learning, no new room left
+        firstIds.forEach { repo.review(it, 1, 1000) }
         settle { d -> d.reviews.size == 20 && d.cards.filter { it.id in firstIds }.none { it.status == Status.NEW } }
         val after = repo.buildQueue(deck.id, false)
         assertEquals(0, after.main.size); assertEquals(20, after.learn.size)
@@ -61,6 +61,18 @@ class StudyFlowTest {
         val picks = (1..5).map { repo.buildQueue(deck.id, false).main.map { it.id }.toSet() }
         assertTrue("shuffled picks reach beyond the first 20", picks.any { p -> p != ordered.toSet() })
         assertTrue(picks.all { it.size == 20 })
+    }
+
+    @Test fun nojiStyleLearning() = runBlocking {
+        val deck = repo.saveDeck(repo.newDeck("Noji"))
+        val c = repo.addCards(deck.id, listOf(DraftCard("principle", "axloq qoidalari"))).first()
+        val cfg = repo.presetFor(deck); val t = now()
+        assertEquals(listOf("1m", "15m", "1d", "4d"), (1..4).map { Srs.preview(c, it, Algo.FSRS, cfg, t) })
+        repo.review(c.id, 3, 1000) // one Good → graduates: the session gets shorter
+        val u = repo.dao.card(c.id)!!
+        assertEquals(Status.REVIEW, u.status); assertEquals(1.0, u.interval, 0.0)
+        settle { d -> d.cards.first { it.id == c.id }.status == Status.REVIEW }
+        assertTrue(repo.buildQueue(deck.id, false).isEmpty)
     }
 
     @Test fun hardAndGoodTimesAreRespected() = runBlocking {

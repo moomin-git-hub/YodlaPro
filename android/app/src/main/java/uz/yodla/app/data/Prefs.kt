@@ -21,6 +21,7 @@ data class Settings(
     val lang: String = "",
     val theme: String = "system",
     val shuffle: Boolean = false,
+    val flipCards: Boolean = false, // false = Noji-style reveal (answer appears under the question), true = 3D flip
     val tts: Boolean = true,
     val ttsAutoplay: Boolean = false,
     val onboarded: Boolean = false,

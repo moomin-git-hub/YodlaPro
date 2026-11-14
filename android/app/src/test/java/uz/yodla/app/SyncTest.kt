@@ -65,7 +65,7 @@ class SyncTest {
         // studying the parent includes subdeck cards
         repo.data.first { it.decks.any { d -> d.id == sub.id } && it.cards.size >= 6 }
         assertTrue(repo.buildQueue(deck.id, true).main.map { it.id }.containsAll(repo.dao.cardsOf(sub.id).map { it.id }))
-        assertEquals(Status.LEARNING, pulled.first { it.type == CardType.BASIC }.status)
+        assertEquals(Status.REVIEW, pulled.first { it.type == CardType.BASIC }.status) // FSRS: one Good graduates a new card (1d)
 
         // image URL redirects to object storage and returns bytes
         val conn = URL(occCards.first().image).openConnection() as HttpURLConnection
