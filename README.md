@@ -16,6 +16,9 @@ Mobile-first learning app (React + TypeScript + Tailwind; Node/Express API on Re
 - Daily reminder (browser notification + .ics calendar event), goals, light/dark/system theme, EN / UZ / RU
 - Offline-first (IndexedDB + service worker + sync queue), keyboard shortcuts on desktop
 
+## Android app
+Native Kotlin + Jetpack Compose client in `android/` (image occlusion, fill-in-the-blank, LaTeX/code, presets, AI, offline sync). See `android/README.md`.
+
 ## Architecture
 ```
 Browser (React PWA, offline-first IndexedDB + sync queue)

@@ -145,3 +145,17 @@ create table if not exists files (
   created_at timestamptz not null default now()
 );
 create index if not exists files_user_idx on files(user_id);
+
+-- v2 (Android app): card types, image occlusion, freeze, archive, presets, card styles, folder look
+alter table flashcards add column if not exists card_type text not null default 'basic';
+alter table flashcards add column if not exists note_id uuid;
+alter table flashcards add column if not exists extra text not null default '';
+alter table flashcards add column if not exists frozen boolean not null default false;
+alter table decks add column if not exists archived boolean not null default false;
+alter table decks add column if not exists preset text not null default 'standard';
+alter table decks add column if not exists style text not null default '';
+alter table decks add column if not exists tts_front text not null default '';
+alter table decks add column if not exists tts_back text not null default '';
+alter table decks add column if not exists sort_order int not null default 0;
+alter table folders add column if not exists color text not null default 'violet';
+alter table folders add column if not exists emoji text not null default '📁';

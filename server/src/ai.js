@@ -15,16 +15,21 @@ const MODEL = process.env.AI_MODEL || DEFAULT_MODELS[PROVIDER];
 
 function buildPrompt(p) {
   const src = p.text ? `Create flashcards from this study material:\n"""\n${p.text}\n"""` : `Create flashcards about the topic: "${p.topic}".`;
+  const detail = { brief: 'Keep answers very short (a few words).', detailed: 'Give thorough answers (up to ~60 words) with context.' }[p.detail] ?? 'Keep answers concise (max ~40 words).';
+  const format = {
+    cloze: 'Every card must be fill-in-the-blank: put the full sentence in "front" and mark the hidden part as {{c1::hidden words}} (use c2, c3 for more blanks in the same sentence); "back" may be empty or a short note.',
+    both: 'Mix formats: about half question/answer cards and half fill-in-the-blank cards where "front" is a sentence with {{c1::hidden words}}.',
+  }[p.format] ?? '"front": one clear, specific question or term (max ~20 words). Avoid yes/no questions. "back": the correct answer.';
   return `${src}
 
 Rules:
 - Produce exactly ${p.count} high-quality flashcards for active recall and spaced repetition.
 - Write every field in ${p.language}.
-- "front": one clear, specific question or term (max ~20 words). Avoid yes/no questions.
-- "back": a concise, correct answer (max ~40 words).
+- ${format}
+- ${detail}
 - "example": a short usage example or concrete instance (may be empty).
 - "explanation": one sentence of extra context that helps memory (may be empty).
-- Cover the most important concepts first; no duplicates.
+- Cover the most important concepts first; no duplicates.${p.instructions ? `\n- Extra instructions from the learner: ${p.instructions}` : ''}
 Return ONLY valid JSON: {"cards":[{"front":"","back":"","example":"","explanation":""}]}`;
 }
 
@@ -71,8 +76,8 @@ function parseCards(raw) {
   const arr = Array.isArray(parsed) ? parsed : parsed.cards;
   if (!Array.isArray(arr)) throw new Error('Bad JSON shape');
   return arr
-    .filter((c) => c && typeof c.front === 'string' && typeof c.back === 'string')
-    .map((c) => ({ front: c.front.slice(0, 500), back: c.back.slice(0, 1500), example: String(c.example ?? '').slice(0, 800), explanation: String(c.explanation ?? '').slice(0, 1000) }));
+    .filter((c) => c && typeof c.front === 'string' && (typeof c.back === 'string' || /\{\{c\d+::/.test(c.front)))
+    .map((c) => ({ front: c.front.slice(0, 500), back: String(c.back ?? '').slice(0, 1500), example: String(c.example ?? '').slice(0, 800), explanation: String(c.explanation ?? '').slice(0, 1000) }));
 }
 
 
@@ -89,9 +94,12 @@ aiRouter.post('/generate', rateLimit({ windowMs: 60 * 60_000, max: 40 }), async 
   const topic = typeof b.topic === 'string' ? b.topic.trim().slice(0, 200) : '';
   const text = typeof b.text === 'string' ? b.text.trim().slice(0, 60_000) : '';
   const language = typeof b.language === 'string' ? b.language.slice(0, 40) : 'English';
+  const format = ['qa', 'cloze', 'both'].includes(b.format) ? b.format : 'qa';
+  const detail = ['brief', 'normal', 'detailed'].includes(b.detail) ? b.detail : 'normal';
+  const instructions = typeof b.instructions === 'string' ? b.instructions.trim().slice(0, 800) : '';
   if (!topic && text.length < 20) return res.status(400).json({ error: 'Provide a topic or at least 20 characters of text' });
   try {
-    const cards = parseCards(await callAI(buildPrompt({ topic, text, count, language }))).slice(0, count);
+    const cards = parseCards(await callAI(buildPrompt({ topic, text, count, language, format, detail, instructions }))).slice(0, count);
     res.json({ cards });
   } catch (e) {
     res.status(502).json({ error: e.message });

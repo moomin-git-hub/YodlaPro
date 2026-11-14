@@ -4,9 +4,9 @@ import { requireAuth } from './auth.js';
 
 // Columns the client may write, per table. user_id is always taken from the token.
 const TABLES = {
-  folders: ['id', 'name', 'created_at', 'updated_at'],
-  decks: ['id', 'title', 'description', 'category', 'folder_id', 'cover', 'color', 'image', 'source_public_id', 'created_at', 'updated_at'],
-  flashcards: ['id', 'deck_id', 'front', 'back', 'example', 'explanation', 'image', 'difficult', 'bookmarked', 'reps', 'lapses', 'ease', 'interval', 'due', 'last_review', 'status', 'step', 'created_at', 'updated_at'],
+  folders: ['id', 'name', 'color', 'emoji', 'created_at', 'updated_at'],
+  decks: ['id', 'title', 'description', 'category', 'folder_id', 'cover', 'color', 'image', 'source_public_id', 'archived', 'preset', 'style', 'tts_front', 'tts_back', 'sort_order', 'created_at', 'updated_at'],
+  flashcards: ['id', 'deck_id', 'note_id', 'card_type', 'extra', 'frozen', 'front', 'back', 'example', 'explanation', 'image', 'difficult', 'bookmarked', 'reps', 'lapses', 'ease', 'interval', 'due', 'last_review', 'status', 'step', 'created_at', 'updated_at'],
   review_logs: ['id', 'card_id', 'deck_id', 'rating', 'ts', 'duration_ms', 'prev_status', 'prev_interval', 'new_interval'],
   study_sessions: ['id', 'deck_id', 'started_at', 'ended_at', 'duration_ms', 'cards_reviewed', 'correct'],
   user_settings: ['data', 'updated_at'],
