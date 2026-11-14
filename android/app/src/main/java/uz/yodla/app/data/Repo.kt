@@ -59,7 +59,24 @@ class Repo(val ctx: Context, val db: YodlaDb = YodlaDb.create(ctx)) {
     fun presetFor(deck: Deck?): SrsConfig {
         val s = data.value.settings
         val id = deck?.preset ?: s.defaultPreset
-        return if (id == Presets.CUSTOM) s.customPreset else Presets.builtIn(id) ?: SrsConfig()
+        val base = if (id == Presets.CUSTOM) s.customPreset else Presets.builtIn(id) ?: SrsConfig()
+        return base.copy(newPerDay = s.newPerDay) // one global, user-adjustable "new words per day"
+    }
+
+    /** Next [n] new cards of [target] that are not in the session yet — "learn more" beyond today's limit. */
+    fun moreNew(target: String, exclude: Set<String>, n: Int = 10): List<QItem> {
+        val d = data.value
+        val active = d.decks.filter { !it.archived && algoFor(it) != Algo.FAST }.map { it.id }.toSet()
+        val scope = when {
+            target == "all" -> active
+            target == "difficult" || target == "bookmarks" -> emptySet()
+            target.startsWith("folder:") -> d.decks.filter { it.folderId == target.removePrefix("folder:") && it.parentId == null }.flatMap { tree(it.id) }.toSet()
+            else -> tree(target).toSet()
+        } intersect active
+        val today = Srs.startOfDay(now())
+        val touched = d.cards.filter { c -> c.id in exclude || d.reviews.any { it.cardId == c.id && it.ts >= today } }.map { it.noteId }.toMutableSet()
+        return d.cards.filter { it.deckId in scope && it.status == Status.NEW && !it.frozen && it.id !in exclude }
+            .sortedBy { it.createdAt }.filter { touched.add(it.noteId) }.take(n).map { QItem(it.id) }
     }
 
     // ---------------- decks & folders ----------------

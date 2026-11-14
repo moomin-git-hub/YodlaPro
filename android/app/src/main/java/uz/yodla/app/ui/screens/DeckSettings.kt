@@ -111,7 +111,6 @@ fun DeckSettingsScreen(nav: NavHostController, id: String) {
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         SettingsGroup {
             SRow(Icons.Rounded.Psychology, stringResource(R.string.learningAlgorithm), stringResource(algoLabel(deck.algorithm))) { sheet = "algo" }
-            if (deck.algorithm != Algo.FAST) SRow(Icons.Rounded.Tune, stringResource(R.string.preset), stringResource(presetLabel(deck.preset))) { sheet = "preset" }
             if (repo.cloud) SRow(Icons.Rounded.Public, stringResource(R.string.shareToExplore)) {
                 ask(ctx.getString(R.string.shareToExplore) + "?", ctx.getString(R.string.shareToExplore), false) {
                     busy = true

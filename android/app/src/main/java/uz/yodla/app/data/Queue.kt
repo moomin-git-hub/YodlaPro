@@ -22,7 +22,10 @@ data class StudyQueue(val main: List<QItem> = emptyList(), val learn: List<Learn
     val size get() = main.size + learn.size
     val isEmpty get() = main.isEmpty() && learn.isEmpty()
 
-    /** Earliest due learning card first, otherwise the next main card, otherwise wait for the next learning card. */
+    /**
+     * Earliest due learning card first, otherwise the next main card, otherwise wait for the next learning card
+     * (the study screen then offers more new words so the user can keep going).
+     */
     fun next(now: Long, force: Boolean = false): Next {
         val ready = learn.filter { it.due <= now }.minByOrNull { it.due }
         if (ready != null) return Next.Show(QItem(ready.id), copy(learn = learn - ready))
@@ -30,6 +33,9 @@ data class StudyQueue(val main: List<QItem> = emptyList(), val learn: List<Learn
         val soon = learn.minByOrNull { it.due } ?: return Next.Done
         return if (force) Next.Show(QItem(soon.id), copy(learn = learn - soon)) else Next.Wait(soon.due)
     }
+
+    /** Adds more new cards (beyond today's limit) at the front of the queue. */
+    fun withNew(items: List<QItem>) = copy(main = items + main)
 
     /** Put a scheduled card back for later today if it is still in learning. */
     fun afterAnswer(card: Card, endOfDay: Long): StudyQueue =

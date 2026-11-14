@@ -221,8 +221,8 @@ export function resetProgress(ids: string[]) {
 export const algoFor = (deck?: Deck): Algorithm => deck?.algorithm ?? 'fsrs';
 export function presetFor(deck?: Deck): SrsConfig {
   const id = deck?.preset ?? state.settings.defaultPreset ?? 'standard';
-  if (id === 'custom') return { ...DEFAULT_CONFIG, ...(state.settings.customPreset ?? {}) };
-  return PRESETS[id as keyof typeof PRESETS] ?? DEFAULT_CONFIG;
+  const base = id === 'custom' ? { ...DEFAULT_CONFIG, ...(state.settings.customPreset ?? {}) } : PRESETS[id as keyof typeof PRESETS] ?? DEFAULT_CONFIG;
+  return { ...base, newPerDay: state.settings.newPerDay }; // one global, user-adjustable "new words per day"
 }
 
 /** All cards of the same note (forward card + its reverse sibling, cloze siblings…). */

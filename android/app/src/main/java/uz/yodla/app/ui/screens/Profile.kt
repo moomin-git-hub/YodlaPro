@@ -110,15 +110,16 @@ fun ProfileScreen(nav: NavHostController) {
         }
 
         Group(stringResource(R.string.learningGoals)) {
-            SettingRow(Icons.Rounded.Flag, stringResource(R.string.cardsPerDay)) { Stepper(s.dailyGoal, 5, 500, 5) { v -> repo.updateSettings { it.copy(dailyGoal = v) } } }
-            SettingRow(Icons.Rounded.Tune, stringResource(R.string.defaultPreset)) {
-                var open by remember { mutableStateOf(false) }
-                Box {
-                    TextButton({ open = true }) { Text(stringResource(presetLabel(s.defaultPreset))); Icon(Icons.Rounded.ExpandMore, null) }
-                    DropdownMenu(open, { open = false }) { Presets.ids.forEach { p -> DropdownMenuItem({ Text(stringResource(presetLabel(p))) }, { open = false; repo.updateSettings { it.copy(defaultPreset = p) } }) } }
-                }
+            SettingRow(Icons.Rounded.Flag, stringResource(R.string.dailyGoal)) { Stepper(s.dailyGoal, 5, 500, 5) { v -> repo.updateSettings { it.copy(dailyGoal = v) } } }
+            SettingRow(Icons.Rounded.FiberNew, stringResource(R.string.newWordsPerDay)) { Stepper(s.newPerDay, 0, 500, 5) { v -> repo.updateSettings { it.copy(newPerDay = v) } } }
+            var algoOpen by remember { mutableStateOf(false) }
+            SettingRow(Icons.Rounded.Science, stringResource(R.string.learningAlgorithm)) {
+                TextButton({ algoOpen = true }) { Text(stringResource(algoLabel(s.defaultAlgorithm)), maxLines = 1); Icon(Icons.Rounded.ExpandMore, null) }
             }
-            NavRowPlain(Icons.Rounded.Science, stringResource(R.string.learningAlgorithm)) { nav.go("presets") }
+            if (algoOpen) AlgorithmSheet(s.defaultAlgorithm, onPick = { a ->
+                algoOpen = false
+                scope.launch { repo.updateSettings { it.copy(defaultAlgorithm = a) }; d.decks.forEach { dk -> if (dk.algorithm != a) repo.saveDeck(dk.copy(algorithm = a)) } }
+            }, onDismiss = { algoOpen = false })
             SwitchRow(Icons.Rounded.Shuffle, stringResource(R.string.shuffle), s.shuffle) { v -> repo.updateSettings { it.copy(shuffle = v) } }
             SwitchRow(Icons.Rounded.VolumeUp, stringResource(R.string.listen), s.tts) { v -> repo.updateSettings { it.copy(tts = v) } }
             SwitchRow(Icons.Rounded.PlayCircle, stringResource(R.string.autoplayAudio), s.ttsAutoplay) { v -> repo.updateSettings { it.copy(ttsAutoplay = v) } }

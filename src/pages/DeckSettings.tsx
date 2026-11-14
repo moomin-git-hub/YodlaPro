@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Globe, Sparkles, WifiOff, Upload, Pencil, CornerUpRight, Copy, RotateCcw, Archive, Download, Trash2, ChevronRight, Brain, SlidersHorizontal, Check } from 'lucide-react';
-import { useData, saveDeck, duplicateDeck, resetProgress, deleteDeck, deckTree, descendants, algoFor, presetFor } from '../lib/store';
+import { ArrowLeft, Globe, Sparkles, WifiOff, Upload, Pencil, CornerUpRight, Copy, RotateCcw, Archive, Download, Trash2, ChevronRight, Brain, Check } from 'lucide-react';
+import { useData, saveDeck, duplicateDeck, resetProgress, deleteDeck, deckTree, descendants, algoFor } from '../lib/store';
 import { useT } from '../lib/i18n';
 import { ALGORITHMS, PRESET_IDS, type Algorithm, type PresetId } from '../lib/srs';
 import { plainText } from '../lib/rich';
@@ -51,7 +51,6 @@ export function DeckSettings() {
   if (!deck) return <Empty icon={null} title={t('notFound')} action={<Button onClick={() => nav('/decks')}>{t('decks')}</Button>} />;
   const cards = d.cards.filter((c) => c.deckId === deck.id);
   const treeIds = deckTree(deck.id, d.decks);
-  const cfg = presetFor(deck);
   const pid = (deck.preset ?? d.settings.defaultPreset ?? 'standard') as PresetId;
   const blocked = new Set(treeIds);
 
@@ -71,8 +70,6 @@ export function DeckSettings() {
 
       <Group>
         <Row icon={<Brain size={20} />} label={t('learningAlgorithm')} value={t(algoKey(algoFor(deck)))} onClick={() => setSheet('algo')} />
-        {algoFor(deck) !== 'fast' && <Row icon={<SlidersHorizontal size={20} />} label={t('preset')} value={t(presetKey(pid))}
-          sub={t('presetSummary2', { a: cfg.learningSteps.map(fmtMin).join(' · '), n: cfg.newPerDay, r: Math.round(cfg.desiredRetention * 100) })} onClick={() => setSheet('preset')} />}
       </Group>
 
       <Group>

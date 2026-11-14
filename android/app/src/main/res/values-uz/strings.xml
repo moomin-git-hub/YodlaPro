@@ -66,7 +66,6 @@
     <string name="cardLanguage">Karta tili</string>
     <string name="cardStyle">Karta ko\'rinishi</string>
     <string name="cards">karta</string>
-    <string name="cardsPerDay">Kunlik takrorlash</string>
     <string name="cardsPerDayN">Kuniga %1$s ta karta</string>
     <string name="cardsToday">Bugun %1$s / %2$s karta</string>
     <string name="casual">Yengil</string>
@@ -227,6 +226,7 @@
     <string name="last12w">12 hafta</string>
     <string name="last30">30 kun</string>
     <string name="last7">7 kun</string>
+    <string name="learnMoreNew">Yana %1$s ta yangi so‘z</string>
     <string name="learned">O\'rganilgan</string>
     <string name="learner">O\'quvchi</string>
     <string name="learning">O\'rganilmoqda</string>
@@ -257,6 +257,7 @@
     <string name="newFolder">Yangi papka</string>
     <string name="newPassword">Yangi parol</string>
     <string name="newPerDay">Kunlik yangi kartalar</string>
+    <string name="newWordsPerDay">Kuniga yangi so‘zlar</string>
     <string name="next">Keyingi</string>
     <string name="nextReview">Keyingi takror</string>
     <string name="noAccount">Hisobingiz yo\'qmi?</string>

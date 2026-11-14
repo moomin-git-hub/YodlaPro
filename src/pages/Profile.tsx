@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart3, ChevronRight, Moon, Globe, Target, Bell, Download, Upload, Trash2, KeyRound, LogOut, Keyboard, Info, Cloud, HardDrive, RefreshCw, Pencil, UserPlus, Volume2, Shuffle, CalendarPlus } from 'lucide-react';
-import { useData, updateSettings, exportBackup, importBackup, wipeData, syncState, syncNow } from '../lib/store';
+import { useData, getData, saveDeck, updateSettings, exportBackup, importBackup, wipeData, syncState, syncNow } from '../lib/store';
 import { useT, LANGS } from '../lib/i18n';
 import { getUser, signOut, changePassword, updateName, upgradeGuest, validatePassword } from '../lib/auth';
 import { download, readFileText, isEmail } from '../lib/util';
@@ -9,8 +9,8 @@ import { Button, Field, PageHeader, Segmented, Sheet, Toggle, confirmDialog, toa
 import { RecoveryCodeScreen } from './Auth';
 import type { Key } from '../lib/i18n';
 import type { Theme } from '../lib/types';
-import { Brain, SlidersHorizontal } from 'lucide-react';
-import { ALGORITHMS, PRESET_IDS, DEFAULT_CONFIG } from '../lib/srs';
+import { Brain } from 'lucide-react';
+import { ALGORITHMS } from '../lib/srs';
 
 export function Profile() {
   const d = useData();
@@ -77,19 +77,13 @@ export function Profile() {
       </Group>
 
       <Group title={t('learningGoals')}>
-        <Row icon={<Target size={18} />} label={t('cardsPerDay')}><Stepper value={s.dailyGoal} min={5} max={500} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} /></Row>
-        <Row icon={<Target size={18} />} label={t('newPerDay')}><Stepper value={s.newPerDay} min={0} max={200} step={5} onChange={(v) => updateSettings({ newPerDay: v, customPreset: { ...DEFAULT_CONFIG, ...s.customPreset, newPerDay: v } })} /></Row>
+        <Row icon={<Target size={18} />} label={t('dailyGoal')}><Stepper value={s.dailyGoal} min={5} max={500} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} /></Row>
+        <Row icon={<Target size={18} />} label={t('newWordsPerDay')}><Stepper value={s.newPerDay} min={0} max={500} step={5} onChange={(v) => updateSettings({ newPerDay: v })} /></Row>
         <Row icon={<Brain size={18} />} label={t('learningAlgorithm')}>
-          <select className="input h-10 w-auto py-0 text-sm" value={s.defaultAlgorithm ?? 'fsrs'} onChange={(e) => updateSettings({ defaultAlgorithm: e.target.value as 'fsrs' })}>
+          <select className="input h-10 w-auto py-0 text-sm" value={s.defaultAlgorithm ?? 'fsrs'} onChange={(e) => { const a = e.target.value as 'fsrs'; updateSettings({ defaultAlgorithm: a }); getData().decks.forEach((dk) => dk.algorithm !== a && saveDeck({ ...dk, algorithm: a })); }}>
             {ALGORITHMS.map((a) => <option key={a} value={a}>{t(a === 'fsrs' ? 'algoFsrs' : a === 'fast' ? 'algoFast' : 'algoSm2')}</option>)}
           </select>
         </Row>
-        <Row icon={<SlidersHorizontal size={18} />} label={t('preset')}>
-          <select className="input h-10 w-auto py-0 text-sm" value={s.defaultPreset ?? 'standard'} onChange={(e) => updateSettings({ defaultPreset: e.target.value })}>
-            {PRESET_IDS.map((p) => <option key={p} value={p}>{t(('preset' + p[0].toUpperCase() + p.slice(1)) as 'presetStandard')}</option>)}
-          </select>
-        </Row>
-        <Row icon={<Target size={18} />} label={`${t('presetCustom')} · ${t('desiredRetention')} %`}><Stepper value={Math.round((s.customPreset?.desiredRetention ?? 0.9) * 100)} min={75} max={97} step={1} onChange={(v) => updateSettings({ customPreset: { ...DEFAULT_CONFIG, ...s.customPreset, newPerDay: s.newPerDay, desiredRetention: v / 100 } })} /></Row>
         <Row icon={<Shuffle size={18} />} label={t('shuffle')}><Toggle label={t('shuffle')} checked={s.shuffle} onChange={(v) => updateSettings({ shuffle: v })} /></Row>
         <Row icon={<Volume2 size={18} />} label={t('listen')}><Toggle label={t('listen')} checked={s.tts} onChange={(v) => updateSettings({ tts: v })} /></Row>
       </Group>

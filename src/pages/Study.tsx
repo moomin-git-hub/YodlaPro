@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { X, Bookmark, AlertTriangle, Undo2, Volume2, Pencil, Trophy, Target, Clock, Lightbulb, MoreVertical, Hourglass } from 'lucide-react';
 import { useData, getData, review, undoReview, updateCard, addSession, algoFor, presetFor } from '../lib/store';
-import { buildQueue, nextCard, afterAnswer, requeue, queueSize, isEmpty, type StudyQueue, type QItem } from '../lib/queue';
+import { buildQueue, nextCard, afterAnswer, requeue, queueSize, isEmpty, moreNew, type StudyQueue, type QItem } from '../lib/queue';
 import { CardMenu } from '../components/CardMenu';
 import { useT } from '../lib/i18n';
 import { previewLabel, endOfToday } from '../lib/srs';
@@ -130,15 +130,17 @@ export function Study() {
 
   if (waitUntil != null) {
     const sec = Math.max(0, Math.ceil((waitUntil - Date.now()) / 1000));
+    const more = moreNew(data, target, new Set([...queue.main.map((x) => x.id), ...queue.learn.map((x) => x.id)]));
     return (
       <div className="mx-auto flex min-h-full max-w-md animate-fade flex-col items-center justify-center px-6 py-10 text-center">
         <div className="absolute left-4 top-4"><IconButton label={t('exitStudy')} onClick={exit}><X size={24} /></IconButton></div>
         <Ring value={1 - Math.min(1, sec / 600)} size={150} stroke={12}><div><Hourglass className="mx-auto mb-1 text-brand-500" size={24} /><div className="text-3xl font-extrabold tabular-nums">{Math.floor(sec / 60)}:{String(sec % 60).padStart(2, '0')}</div></div></Ring>
         <h1 className="mt-6 text-2xl font-extrabold">{t('waitTitle')}</h1>
         <p className="mt-2 text-sm opacity-60">{t('waitSub', { n: queue.learn.length })}</p>
-        <div className="mt-8 flex w-full gap-3">
+        {more.length > 0 && <Button size="lg" block className="mt-8" onClick={() => advance({ ...queue, main: [...more, ...queue.main] })}>{t('learnMoreNew', { n: more.length })}</Button>}
+        <div className={cx('flex w-full gap-3', more.length ? 'mt-3' : 'mt-8')}>
           <Button variant="secondary" size="lg" block onClick={() => { setWaitUntil(null); setFinished(true); }}>{t('finishSession')}</Button>
-          <Button size="lg" block onClick={() => advance(queue, true)}>{t('studyNow')}</Button>
+          <Button variant={more.length ? 'secondary' : undefined} size="lg" block onClick={() => advance(queue, true)}>{t('studyNow')}</Button>
         </div>
       </div>
     );

@@ -94,3 +94,19 @@ export function buildQueue(d: UserData, target: string, practice: boolean, now =
 
 /** Number of cards that will come up today (for badges): reviews + learning + new within limits. */
 export const todayCount = (d: UserData, target: string) => { const q = buildQueue(d, target, false); return q.main.filter((x) => x.mode === 'srs').length + q.learn.length; };
+
+/** Next [n] new cards of [target] not in the session yet — "learn more" beyond today's limit. */
+export function moreNew(d: UserData, target: string, exclude: Set<string>, n = 10): QItem[] {
+  const active = new Set(d.decks.filter((x) => !x.archived && algoFor(x) !== 'fast').map((x) => x.id));
+  const scope = target === 'all' ? active
+    : target === 'difficult' || target === 'bookmarks' ? new Set<string>()
+    : target.startsWith('folder:') ? new Set(d.decks.filter((x) => x.folderId === target.slice(7) && !x.parentId).flatMap((x) => deckTree(x.id, d.decks)))
+    : new Set(deckTree(target, d.decks));
+  const today = startOfDay(Date.now());
+  const reviewed = new Set(d.reviews.filter((r) => r.ts >= today).map((r) => r.cardId));
+  const touched = new Set(d.cards.filter((c) => exclude.has(c.id) || reviewed.has(c.id)).map((c) => c.noteId ?? c.id));
+  return d.cards.filter((c) => scope.has(c.deckId) && active.has(c.deckId) && c.status === 'new' && !c.frozen && !exclude.has(c.id))
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .filter((c) => { const k = c.noteId ?? c.id; if (touched.has(k)) return false; touched.add(k); return true; })
+    .slice(0, n).map((c) => ({ id: c.id, mode: 'srs' as const }));
+}

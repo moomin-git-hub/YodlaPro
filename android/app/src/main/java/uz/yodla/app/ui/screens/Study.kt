@@ -168,7 +168,11 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
                 val q = repo.buildQueue(target, false).let { if (it.isEmpty) repo.buildQueue(target, true) else it }
                 advance(q)
             }, onDone = { exit() })
-            waitUntil != null -> WaitingScreen(waitUntil!!, queue.learn.size, onNow = { advance(queue, force = true) }, onFinish = { finished = true }, onExit = ::exit)
+            waitUntil != null -> {
+                val more = remember(queue, d.cards.size) { repo.moreNew(target, (queue.main.map { it.id } + queue.learn.map { it.id }).toSet()) }
+                WaitingScreen(waitUntil!!, queue.learn.size, moreCount = more.size, onMore = { advance(queue.withNew(more)) },
+                    onNow = { advance(queue, force = true) }, onFinish = { finished = true }, onExit = ::exit)
+            }
             card != null && item != null -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(::exit) { Icon(Icons.Rounded.Close, stringResource(R.string.exitStudy)) }
@@ -209,7 +213,7 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
 
 /** Only learning cards are left and none is due yet — show when the next one comes back. */
 @Composable
-private fun WaitingScreen(until: Long, count: Int, onNow: () -> Unit, onFinish: () -> Unit, onExit: () -> Unit) {
+private fun WaitingScreen(until: Long, count: Int, moreCount: Int, onMore: () -> Unit, onNow: () -> Unit, onFinish: () -> Unit, onExit: () -> Unit) {
     var nowMs by remember { mutableLongStateOf(now()) }
     LaunchedEffect(until) { while (true) { nowMs = now(); kotlinx.coroutines.delay(1000) } }
     val sec = ((until - nowMs) / 1000).coerceAtLeast(0)
@@ -221,9 +225,14 @@ private fun WaitingScreen(until: Long, count: Int, onNow: () -> Unit, onFinish: 
         Text(stringResource(R.string.waitTitle), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         Text(stringResource(R.string.waitSub, count), style = Muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.weight(1f))
+        if (moreCount > 0) {
+            PrimaryButton(stringResource(R.string.learnMoreNew, moreCount), onMore, Modifier.fillMaxWidth().height(56.dp))
+            Spacer(Modifier.height(10.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SecondaryButton(stringResource(R.string.finishSession), onFinish, Modifier.weight(1f))
-            PrimaryButton(stringResource(R.string.studyNow), onNow, Modifier.weight(1f))
+            if (moreCount > 0) SecondaryButton(stringResource(R.string.studyNow), onNow, Modifier.weight(1f))
+            else PrimaryButton(stringResource(R.string.studyNow), onNow, Modifier.weight(1f))
         }
     }
 }
@@ -285,7 +294,8 @@ private fun FlipCard(card: Card, deck: Deck?, flipped: Boolean, style: CardStyle
         }
         if (abs(drag.value) > 60f) {
             val good = drag.value > 0
-            Text(stringResource(if (good) R.string.good else R.string.again), Modifier.align(if (good) Alignment.TopStart else Alignment.TopEnd).padding(24.dp).clip(RoundedCornerShape(12.dp))
+            val back = rot > 90f
+            Text(stringResource(if (good) R.string.good else R.string.again), Modifier.align(if (good != back) Alignment.TopStart else Alignment.TopEnd).graphicsLayer { if (back) rotationY = 180f }.padding(24.dp).clip(RoundedCornerShape(12.dp))
                 .background(if (good) Emerald else Rose).padding(horizontal = 14.dp, vertical = 6.dp), color = Color.White, fontWeight = FontWeight.ExtraBold)
         }
     }

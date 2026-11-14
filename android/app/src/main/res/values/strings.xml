@@ -67,7 +67,6 @@
     <string name="cardLanguage">Card language</string>
     <string name="cardStyle">Card style</string>
     <string name="cards">cards</string>
-    <string name="cardsPerDay">Reviews per day</string>
     <string name="cardsPerDayN">%1$s cards / day</string>
     <string name="cardsToday">%1$s of %2$s cards today</string>
     <string name="casual">Casual</string>
@@ -228,6 +227,7 @@
     <string name="last12w">12 weeks</string>
     <string name="last30">30 days</string>
     <string name="last7">7 days</string>
+    <string name="learnMoreNew">Learn %1$s more new words</string>
     <string name="learned">Learned</string>
     <string name="learner">Learner</string>
     <string name="learning">Learning</string>
@@ -258,6 +258,7 @@
     <string name="newFolder">New folder</string>
     <string name="newPassword">New password</string>
     <string name="newPerDay">New cards per day</string>
+    <string name="newWordsPerDay">New words per day</string>
     <string name="next">Next</string>
     <string name="nextReview">Next review</string>
     <string name="noAccount">Don\'t have an account?</string>
