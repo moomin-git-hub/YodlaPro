@@ -8,6 +8,7 @@ import { fetchPublicDecks, fetchPublicCards } from '../lib/ai';
 import { Button, Chip, DeckCover, Empty, IconButton, PageHeader, Segmented, toast } from '../components/ui';
 import type { PublicDeck } from '../lib/types';
 import { cx } from '../lib/util';
+import { RichView } from '../components/RichEditor';
 
 let cache: PublicDeck[] | null = null;
 function usePublicDecks() {
@@ -121,8 +122,8 @@ export function PublicDeckPage() {
       <ul className="space-y-2">
         {(cards ?? []).map((c, i) => (
           <li key={i} className="card-surface rounded-2xl p-4">
-            <p className="font-bold">{c.front}</p>
-            <p className="text-sm opacity-65">{c.back}</p>
+            <RichView html={c.front} className="font-bold" />
+            <RichView html={c.back} className="text-sm opacity-65" />
             {c.example && <p className="mt-1 text-xs italic opacity-50">{c.example}</p>}
           </li>
         ))}

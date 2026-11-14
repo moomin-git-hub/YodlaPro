@@ -3,7 +3,7 @@ import type { Card, Deck, Folder, ReviewLog, Settings, StudySession, UserData, D
 import { kvGet, kvSet, uid, ls } from './util';
 import { api, cloudEnabled, ApiError } from './api';
 import type { AuthUser } from './auth';
-import { newCardDefaults, schedule } from './srs';
+import { newCardDefaults, schedule, PRESETS, DEFAULT_CONFIG, type Algorithm, type SrsConfig } from './srs';
 
 export const defaultSettings = (): Settings => ({
   dailyGoal: 20, newPerDay: 20, reminderEnabled: false, reminderTime: '20:00',
@@ -158,27 +158,39 @@ const now = () => Date.now();
 
 export function saveDeck(d: Partial<Deck> & { title: string }): Deck {
   const existing = d.id ? state.decks.find((x) => x.id === d.id) : undefined;
-  const deck: Deck = { description: '', category: 'general', folderId: null, cover: '📘', color: 'violet', image: '', sourcePublicId: null, createdAt: now(), ...existing, ...d, id: d.id ?? uid(), updatedAt: now() } as Deck;
+  const deck: Deck = { description: '', category: 'general', folderId: null, parentId: null, algorithm: state.settings.defaultAlgorithm ?? 'fsrs', preset: state.settings.defaultPreset ?? 'standard', cover: '📘', color: 'violet', image: '', sourcePublicId: null, createdAt: now(), ...existing, ...d, id: d.id ?? uid(), updatedAt: now() } as Deck;
   set({ decks: existing ? state.decks.map((x) => (x.id === deck.id ? deck : x)) : [deck, ...state.decks] }, [{ t: 'up', table: 'decks', row: toRow(deck) }]);
   return deck;
 }
 
+/** All subdeck ids below a deck (any depth). */
+export function descendants(id: string, decks = state.decks): string[] {
+  const out: string[] = [];
+  const walk = (p: string) => decks.forEach((d) => { if (d.parentId === p && !out.includes(d.id) && d.id !== id) { out.push(d.id); walk(d.id); } });
+  walk(id);
+  return out;
+}
+/** Deck + all its subdecks. */
+export const deckTree = (id: string, decks = state.decks) => [id, ...descendants(id, decks)];
+
+/** Deletes the deck, all its subdecks and their cards (cards cascade in the DB). */
 export function deleteDeck(id: string) {
-  const cardIds = state.cards.filter((c) => c.deckId === id).map((c) => c.id);
+  const ids = new Set(deckTree(id));
+  const n = state.cards.filter((c) => ids.has(c.deckId)).length;
   set(
-    { decks: state.decks.filter((d) => d.id !== id), cards: state.cards.filter((c) => c.deckId !== id) },
-    // flashcards cascade in DB via FK
-    [{ t: 'del', table: 'decks', id }],
+    { decks: state.decks.filter((d) => !ids.has(d.id)), cards: state.cards.filter((c) => !ids.has(c.deckId)) },
+    [...ids].reverse().map((x) => ({ t: 'del' as const, table: 'decks' as const, id: x })),
   );
-  return cardIds.length;
+  return n;
 }
 
 export function addCards(deckId: string, drafts: (DraftCard & { image?: string })[]): Card[] {
   const t = now();
-  const cards: Card[] = drafts.map((d, i) => ({
+  const cards: Card[] = drafts.map((d, i) => withNote({
     id: uid(), deckId, front: d.front.trim(), back: d.back.trim(), example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(),
     image: d.image ?? '', difficult: false, bookmarked: false, ...newCardDefaults(), due: t + i, createdAt: t + i, updatedAt: t,
   }));
+  function withNote(c: Card): Card { return { ...c, noteId: c.id, cardType: 'basic' }; }
   set({ cards: [...state.cards, ...cards] }, cards.map((c) => ({ t: 'up', table: 'flashcards', row: toRow(c) })));
   return cards;
 }
@@ -206,10 +218,67 @@ export function resetProgress(ids: string[]) {
   set({ cards }, ops);
 }
 
+export const algoFor = (deck?: Deck): Algorithm => deck?.algorithm ?? 'fsrs';
+export function presetFor(deck?: Deck): SrsConfig {
+  const id = deck?.preset ?? state.settings.defaultPreset ?? 'standard';
+  if (id === 'custom') return { ...DEFAULT_CONFIG, ...(state.settings.customPreset ?? {}) };
+  return PRESETS[id as keyof typeof PRESETS] ?? DEFAULT_CONFIG;
+}
+
+/** All cards of the same note (forward card + its reverse sibling, cloze siblings…). */
+export const noteOf = (c: Card) => state.cards.filter((x) => (x.noteId ?? x.id) === (c.noteId ?? c.id));
+export const hasReverse = (c: Card) => noteOf(c).some((x) => x.cardType === 'reverse');
+
+/** Saves a basic note's content to all its cards and adds/removes the reverse sibling. */
+export function saveBasicNote(card: Card, patch: Partial<Card>, reversed: boolean) {
+  const t = now(), noteId = card.noteId ?? card.id;
+  const sib = noteOf(card);
+  const ops: Op[] = [];
+  const content = { front: patch.front, back: patch.back, example: patch.example, explanation: patch.explanation, image: patch.image, deckId: patch.deckId } as Partial<Card>;
+  Object.keys(content).forEach((k) => content[k as keyof Card] === undefined && delete content[k as keyof Card]);
+  let cards = state.cards.map((c) => {
+    if (!sib.includes(c)) return c;
+    const n: Card = { ...c, ...content, ...(c.id === card.id ? patch : {}), noteId, updatedAt: t };
+    ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
+    return n;
+  });
+  const rev = sib.find((x) => x.cardType === 'reverse');
+  if (reversed && !rev) {
+    const base = cards.find((c) => c.id === card.id)!;
+    const n: Card = { ...base, ...newCardDefaults(), id: uid(), noteId, cardType: 'reverse', difficult: false, bookmarked: false, frozen: false, createdAt: t + 1, updatedAt: t };
+    cards = [...cards, n]; ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
+  } else if (!reversed && rev) {
+    cards = cards.filter((c) => c.id !== rev.id); ops.push({ t: 'del', table: 'flashcards', id: rev.id });
+  }
+  set({ cards }, ops);
+}
+
+/** Copies a note (all its cards) with fresh progress. */
+export function duplicateNote(card: Card) {
+  const t = now(), noteId = uid();
+  const copies = noteOf(card).map((c, i) => ({ ...c, ...newCardDefaults(), id: uid(), noteId, createdAt: t + i, updatedAt: t }));
+  set({ cards: [...state.cards, ...copies] }, copies.map((c) => ({ t: 'up' as const, table: 'flashcards' as const, row: toRow(c) })));
+}
+
+/** Copies a deck (only its own cards) with fresh progress. */
+export function duplicateDeck(id: string) {
+  const src = state.decks.find((d) => d.id === id);
+  if (!src) return null;
+  const copy = saveDeck({ ...src, id: undefined, title: src.title + ' (2)', sourcePublicId: null, createdAt: now() } as unknown as Deck);
+  const t = now(), notes = new Map<string, string>();
+  const cards = state.cards.filter((c) => c.deckId === id).map((c, i) => {
+    const nid = notes.get(c.noteId ?? c.id) ?? uid(); notes.set(c.noteId ?? c.id, nid);
+    return { ...c, ...newCardDefaults(), id: uid(), deckId: copy.id, noteId: nid, createdAt: t + i, updatedAt: t };
+  });
+  set({ cards: [...state.cards, ...cards] }, cards.map((c) => ({ t: 'up' as const, table: 'flashcards' as const, row: toRow(c) })));
+  return copy;
+}
+
 export function review(cardId: string, rating: Rating, durationMs: number): { prev: Card } | null {
   const c = state.cards.find((x) => x.id === cardId);
   if (!c) return null;
-  const s = schedule(c, rating);
+  const deck = state.decks.find((d) => d.id === c.deckId);
+  const s = schedule(c, rating, algoFor(deck), presetFor(deck));
   const next: Card = { ...c, ...s, lastReview: now(), updatedAt: now() };
   const log: ReviewLog = { id: uid(), cardId, deckId: c.deckId, rating, ts: now(), durationMs: Math.min(durationMs, 120_000), prevStatus: c.status, prevInterval: c.interval, newInterval: s.interval };
   set(
@@ -240,9 +309,9 @@ export function updateSettings(p: Partial<Settings>) {
   set({ settings }, [{ t: 'up', table: 'user_settings', row: { user_id: user?.id, data: settings, updated_at: new Date().toISOString() } }]);
 }
 
-export function saveFolder(name: string, id?: string) {
+export function saveFolder(name: string, id?: string, look: { color?: string; emoji?: string } = {}) {
   const ex = id ? state.folders.find((f) => f.id === id) : undefined;
-  const f: Folder = { id: id ?? uid(), name: name.trim(), createdAt: ex?.createdAt ?? now(), updatedAt: now() };
+  const f: Folder = { color: 'violet', emoji: '📁', ...ex, ...look, id: id ?? uid(), name: name.trim(), createdAt: ex?.createdAt ?? now(), updatedAt: now() };
   set({ folders: ex ? state.folders.map((x) => (x.id === f.id ? f : x)) : [...state.folders, f] }, [{ t: 'up', table: 'folders', row: toRow(f) }]);
   return f;
 }

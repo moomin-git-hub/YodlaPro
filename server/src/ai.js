@@ -7,10 +7,30 @@ const KEY = process.env.AI_API_KEY ?? '';
 const DEFAULT_MODELS = {
   anthropic: 'claude-sonnet-4-5',
   openai: 'gpt-4o-mini',
-  gemini: 'gemini-2.0-flash',
+  gemini: 'gemini-flash-latest', // alias that always points at Google's current Flash model
   openrouter: 'anthropic/claude-sonnet-4.5',
 };
-const MODEL = process.env.AI_MODEL || DEFAULT_MODELS[PROVIDER];
+let MODEL = process.env.AI_MODEL || DEFAULT_MODELS[PROVIDER];
+
+// Models get retired. When the provider says a model is gone, find a working replacement once and remember it.
+const RETIRED = /no longer available|not found|is not supported|deprecated|does not exist|model_not_found|unknown model/i;
+async function geminiReplacement(message) {
+  const hinted = message.match(/use (?:models\/)?([\w.-]+)/i)?.[1];
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${KEY}`);
+    const j = await r.json();
+    const ok = (j.models ?? []).filter((m) => m.supportedGenerationMethods?.includes('generateContent')).map((m) => m.name.replace(/^models\//, ''));
+    if (hinted && ok.includes(hinted)) return hinted;
+    const score = (n) => {
+      const v = n.match(/gemini-(\d+(?:\.\d+)?)/);
+      return (v ? parseFloat(v[1]) * 100 : 0) + (/flash/.test(n) ? 10 : 0) - (/lite|preview|exp|thinking|tts|image|live|embedding|audio/.test(n) ? 50 : 0);
+    };
+    const best = ok.filter((n) => n.startsWith('gemini')).sort((a, b) => score(b) - score(a))[0];
+    return best ?? hinted ?? 'gemini-flash-latest';
+  } catch {
+    return hinted ?? 'gemini-flash-latest';
+  }
+}
 
 
 function buildPrompt(p) {
@@ -33,8 +53,21 @@ Rules:
 Return ONLY valid JSON: {"cards":[{"front":"","back":"","example":"","explanation":""}]}`;
 }
 
-async function callAI(prompt) {
-  const sys = 'You are an expert teacher who writes excellent flashcards. You always reply with strict JSON only.';
+const SYS = 'You are an expert teacher who writes excellent flashcards. You always reply with strict JSON only.';
+async function callAI(prompt, sys = SYS) {
+  try {
+    return await callModel(prompt, sys);
+  } catch (e) {
+    if (PROVIDER !== 'gemini' || !RETIRED.test(e.message)) throw e;
+    const next = await geminiReplacement(e.message);
+    if (next === MODEL) throw e;
+    console.warn(`AI model ${MODEL} unavailable, switching to ${next}`);
+    MODEL = next;
+    return callModel(prompt, sys);
+  }
+}
+
+async function callModel(prompt, sys) {
   if (PROVIDER === 'anthropic') {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -86,6 +119,33 @@ export const aiRouter = Router();
 aiRouter.use(requireAuth);
 
 aiRouter.get('/status', (_req, res) => res.json({ ok: aiConfigured(), provider: aiConfigured() ? PROVIDER : null }));
+
+// Toolbar "✨" in the card editor: write the answer / an example / an explanation for one card.
+aiRouter.post('/assist', rateLimit({ windowMs: 60 * 60_000, max: 120 }), async (req, res) => {
+  if (!aiConfigured()) return res.status(503).json({ error: 'AI provider is not configured on the server' });
+  const b = req.body ?? {};
+  const strip = (v) => (typeof v === 'string' ? v.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000) : '');
+  const front = strip(b.front), back = strip(b.back);
+  const action = ['answer', 'example', 'explanation', 'improve', 'question'].includes(b.action) ? b.action : 'answer';
+  const language = typeof b.language === 'string' && b.language ? b.language.slice(0, 40) : 'the same language as the card';
+  if (!front && !back) return res.status(400).json({ error: 'Write something on the card first' });
+  const task = {
+    answer: 'Write the best concise answer (back side) for this question/term.',
+    question: 'Write a clear question (front side) whose answer is the given back side.',
+    example: 'Write one short, natural example sentence or concrete instance that illustrates it.',
+    explanation: 'Write one or two sentences of explanation that make it easier to remember.',
+    improve: 'Rewrite the front and back to be clearer and more precise, keeping the meaning.',
+  }[action];
+  const prompt = `Flashcard\nFront: ${front || '(empty)'}\nBack: ${back || '(empty)'}\n\nTask: ${task}\nAnswer in ${language}. Plain text, no markdown.\nReturn ONLY JSON: {"front":"","back":"","text":""} — put your result in "text" (and for "improve" fill "front" and "back").`;
+  try {
+    const raw = await callAI(prompt, 'You are an expert teacher helping write flashcards. You always reply with strict JSON only.');
+    const m = raw.match(/\{[\s\S]*\}/);
+    const j = m ? JSON.parse(m[0]) : { text: raw.trim() };
+    res.json({ text: String(j.text ?? '').trim(), front: String(j.front ?? '').trim(), back: String(j.back ?? '').trim() });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
 
 aiRouter.post('/generate', rateLimit({ windowMs: 60 * 60_000, max: 40 }), async (req, res) => {
   if (!aiConfigured()) return res.status(503).json({ error: 'AI provider is not configured on the server' });

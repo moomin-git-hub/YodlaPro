@@ -1,0 +1,726 @@
+{
+ "vectors": [
+  {
+   "name": "fsrs-good-path",
+   "algo": "fsrs",
+   "preset": "standard",
+   "steps": [
+    {
+     "r": 3,
+     "now": 1760000000000,
+     "status": "learning",
+     "step": 1,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000600000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 3.173,
+     "difficulty": 5.2824
+    },
+    {
+     "r": 3,
+     "now": 1760000600000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 5,
+     "due": 1760432600000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 4.4669,
+     "difficulty": 5.2729
+    },
+    {
+     "r": 3,
+     "now": 1760432600000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 13,
+     "due": 1761555800000,
+     "reps": 3,
+     "lapses": 0,
+     "stability": 16.3837,
+     "difficulty": 5.2635
+    },
+    {
+     "r": 3,
+     "now": 1761555800000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 48,
+     "due": 1765703000000,
+     "reps": 4,
+     "lapses": 0,
+     "stability": 43.8564,
+     "difficulty": 5.2541
+    },
+    {
+     "r": 3,
+     "now": 1765703000000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 122,
+     "due": 1776243800000,
+     "reps": 5,
+     "lapses": 0,
+     "stability": 131.4909,
+     "difficulty": 5.2448
+    },
+    {
+     "r": 3,
+     "now": 1776243800000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 346,
+     "due": 1806138200000,
+     "reps": 6,
+     "lapses": 0,
+     "stability": 330.5268,
+     "difficulty": 5.2355
+    }
+   ]
+  },
+  {
+   "name": "fsrs-mixed",
+   "algo": "fsrs",
+   "preset": "standard",
+   "steps": [
+    {
+     "r": 1,
+     "now": 1760000000000,
+     "status": "learning",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000060000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 0.4026,
+     "difficulty": 7.1949
+    },
+    {
+     "r": 2,
+     "now": 1760000060000,
+     "status": "learning",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000390000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 0.3381,
+     "difficulty": 7.6297
+    },
+    {
+     "r": 3,
+     "now": 1760000390000,
+     "status": "learning",
+     "step": 1,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000990000,
+     "reps": 3,
+     "lapses": 0,
+     "stability": 0.476,
+     "difficulty": 7.6094
+    },
+    {
+     "r": 3,
+     "now": 1760000990000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760087390000,
+     "reps": 4,
+     "lapses": 0,
+     "stability": 0.6701,
+     "difficulty": 7.5892
+    },
+    {
+     "r": 2,
+     "now": 1760090990000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760177390000,
+     "reps": 5,
+     "lapses": 0,
+     "stability": 1.0816,
+     "difficulty": 7.9585
+    },
+    {
+     "r": 1,
+     "now": 1760177390000,
+     "status": "relearning",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760177990000,
+     "reps": 6,
+     "lapses": 1,
+     "stability": 0.4627,
+     "difficulty": 8.5962
+    },
+    {
+     "r": 3,
+     "now": 1760177990000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760264390000,
+     "reps": 7,
+     "lapses": 1,
+     "stability": 0.6514,
+     "difficulty": 8.5715
+    },
+    {
+     "r": 4,
+     "now": 1760264390000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 4,
+     "due": 1760609990000,
+     "reps": 8,
+     "lapses": 1,
+     "stability": 4.3029,
+     "difficulty": 8.3162
+    },
+    {
+     "r": 3,
+     "now": 1760869190000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 11,
+     "due": 1761819590000,
+     "reps": 9,
+     "lapses": 1,
+     "stability": 11.7825,
+     "difficulty": 8.2928
+    }
+   ]
+  },
+  {
+   "name": "fsrs-easy",
+   "algo": "fsrs",
+   "preset": "languages",
+   "steps": [
+    {
+     "r": 4,
+     "now": 1760000000000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 13,
+     "due": 1761123200000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 15.6911,
+     "difficulty": 3.2245
+    },
+    {
+     "r": 4,
+     "now": 1761123200000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 121,
+     "due": 1771577600000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 127.195,
+     "difficulty": 2.1301
+    },
+    {
+     "r": 3,
+     "now": 1771577600000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 421,
+     "due": 1807952000000,
+     "reps": 3,
+     "lapses": 0,
+     "stability": 431.9143,
+     "difficulty": 2.1351
+    },
+    {
+     "r": 2,
+     "now": 1807952000000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 624,
+     "due": 1861865600000,
+     "reps": 4,
+     "lapses": 0,
+     "stability": 643.4514,
+     "difficulty": 3.4105
+    }
+   ]
+  },
+  {
+   "name": "fsrs-exam-cap",
+   "algo": "fsrs",
+   "preset": "exam",
+   "steps": [
+    {
+     "r": 3,
+     "now": 1760000000000,
+     "status": "learning",
+     "step": 1,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000300000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 3.173,
+     "difficulty": 5.2824
+    },
+    {
+     "r": 3,
+     "now": 1760000300000,
+     "status": "learning",
+     "step": 2,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760001500000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 4.4669,
+     "difficulty": 5.2729
+    },
+    {
+     "r": 3,
+     "now": 1760001500000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 6,
+     "due": 1760519900000,
+     "reps": 3,
+     "lapses": 0,
+     "stability": 6.2884,
+     "difficulty": 5.2635
+    },
+    {
+     "r": 4,
+     "now": 1760519900000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 27,
+     "due": 1762852700000,
+     "reps": 4,
+     "lapses": 0,
+     "stability": 48.0886,
+     "difficulty": 4.4891
+    },
+    {
+     "r": 4,
+     "now": 1762852700000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 29,
+     "due": 1765358300000,
+     "reps": 5,
+     "lapses": 0,
+     "stability": 222.5966,
+     "difficulty": 3.5932
+    },
+    {
+     "r": 4,
+     "now": 1765358300000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 29,
+     "due": 1767863900000,
+     "reps": 6,
+     "lapses": 0,
+     "stability": 408.8782,
+     "difficulty": 2.5567
+    },
+    {
+     "r": 4,
+     "now": 1767863900000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 29,
+     "due": 1770369500000,
+     "reps": 7,
+     "lapses": 0,
+     "stability": 607.7265,
+     "difficulty": 1.3575
+    }
+   ]
+  },
+  {
+   "name": "sm2-path",
+   "algo": "sm2",
+   "preset": "standard",
+   "steps": [
+    {
+     "r": 3,
+     "now": 1760000000000,
+     "status": "learning",
+     "step": 1,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000600000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760000600000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760087000000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760087000000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 4,
+     "due": 1760432600000,
+     "reps": 3,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760605400000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 11,
+     "due": 1761555800000,
+     "reps": 4,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 2,
+     "now": 1761555800000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.35,
+     "interval": 15,
+     "due": 1762851800000,
+     "reps": 5,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 4,
+     "now": 1762851800000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 50,
+     "due": 1767171800000,
+     "reps": 6,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 1,
+     "now": 1767171800000,
+     "status": "relearning",
+     "step": 0,
+     "ease": 2.3,
+     "interval": 10,
+     "due": 1767172400000,
+     "reps": 7,
+     "lapses": 1,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1767172400000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.3,
+     "interval": 12,
+     "due": 1768209200000,
+     "reps": 8,
+     "lapses": 1,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1768209200000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.3,
+     "interval": 31,
+     "due": 1770887600000,
+     "reps": 9,
+     "lapses": 1,
+     "stability": 0,
+     "difficulty": 0
+    }
+   ]
+  },
+  {
+   "name": "sm2-medical",
+   "algo": "sm2",
+   "preset": "medical",
+   "steps": [
+    {
+     "r": 2,
+     "now": 1760000000000,
+     "status": "learning",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000330000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760000330000,
+     "status": "learning",
+     "step": 1,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000930000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760000930000,
+     "status": "learning",
+     "step": 2,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760004530000,
+     "reps": 3,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760004530000,
+     "status": "learning",
+     "step": 3,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760026130000,
+     "reps": 4,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760026130000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760112530000,
+     "reps": 5,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 4,
+     "now": 1760112530000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.65,
+     "interval": 4,
+     "due": 1760458130000,
+     "reps": 6,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 1,
+     "now": 1760458130000,
+     "status": "relearning",
+     "step": 0,
+     "ease": 2.45,
+     "interval": 1,
+     "due": 1760458730000,
+     "reps": 7,
+     "lapses": 1,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760458730000,
+     "status": "relearning",
+     "step": 1,
+     "ease": 2.45,
+     "interval": 1,
+     "due": 1760462330000,
+     "reps": 8,
+     "lapses": 1,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760462330000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.45,
+     "interval": 1,
+     "due": 1760548730000,
+     "reps": 9,
+     "lapses": 1,
+     "stability": 0,
+     "difficulty": 0
+    }
+   ]
+  },
+  {
+   "name": "fast",
+   "algo": "fast",
+   "preset": "standard",
+   "steps": [
+    {
+     "r": 1,
+     "now": 1760000000000,
+     "status": "new",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000000000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 3,
+     "now": 1760000000000,
+     "status": "new",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000000000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    },
+    {
+     "r": 4,
+     "now": 1760000000000,
+     "status": "new",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 0,
+     "due": 1760000000000,
+     "reps": 3,
+     "lapses": 0,
+     "stability": 0,
+     "difficulty": 0
+    }
+   ]
+  }
+ ],
+ "hash": [
+  [
+   "",
+   0.5043428998906165
+  ],
+  [
+   "a",
+   0.8908105595037341
+  ],
+  [
+   "card-1:3h",
+   0.04353301739320159
+  ],
+  [
+   "Ünïcødé ✓",
+   0.41257203300483525
+  ]
+ ],
+ "fuzz": [
+  [
+   2,
+   "x",
+   2
+  ],
+  [
+   3.4,
+   "y",
+   5
+  ],
+  [
+   10,
+   "z",
+   12
+  ],
+  [
+   45,
+   "w",
+   49
+  ],
+  [
+   400,
+   "q",
+   420
+  ]
+ ],
+ "retr": [
+  [
+   1,
+   1,
+   0.9
+  ],
+  [
+   10,
+   3.17,
+   0.7581063580584861
+  ],
+  [
+   100,
+   50,
+   0.8250286473253902
+  ]
+ ]
+}

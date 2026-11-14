@@ -159,3 +159,13 @@ alter table decks add column if not exists tts_back text not null default '';
 alter table decks add column if not exists sort_order int not null default 0;
 alter table folders add column if not exists color text not null default 'violet';
 alter table folders add column if not exists emoji text not null default '📁';
+
+-- v3: subdecks
+alter table decks add column if not exists parent_id uuid;
+create index if not exists decks_parent_idx on decks(parent_id);
+
+-- v4: learning algorithm (FSRS / SM-2 / fast review), memory state, offline decks
+alter table decks add column if not exists algorithm text not null default 'fsrs';
+alter table decks add column if not exists offline boolean not null default false;
+alter table flashcards add column if not exists stability real not null default 0;
+alter table flashcards add column if not exists difficulty real not null default 0;

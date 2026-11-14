@@ -5,9 +5,10 @@ import { loadUser, useData, getData } from './lib/store';
 import { ConfirmHost, ToastHost } from './components/ui';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
-import { Decks } from './pages/Decks';
+import { Decks, FolderPage } from './pages/Decks';
 import { DeckDetail } from './pages/DeckDetail';
 import { DeckEditor } from './pages/DeckEditor';
+import { DeckSettings } from './pages/DeckSettings';
 import { CardEditor } from './pages/CardEditor';
 import { Study } from './pages/Study';
 import { Explore, PublicDeckPage } from './pages/Explore';
@@ -112,9 +113,11 @@ export function App() {
           <Route element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="decks" element={<Decks />} />
+            <Route path="folder/:id" element={<FolderPage />} />
             <Route path="deck/new" element={<DeckEditor />} />
             <Route path="deck/:id" element={<DeckDetail />} />
             <Route path="deck/:id/edit" element={<DeckEditor />} />
+            <Route path="deck/:id/settings" element={<DeckSettings />} />
             <Route path="card/new" element={<CardEditor />} />
             <Route path="card/:id/edit" element={<CardEditor />} />
             <Route path="explore" element={<Explore />} />

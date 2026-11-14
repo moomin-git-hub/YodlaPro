@@ -22,6 +22,10 @@ export async function generateCards(input: { topic?: string; text?: string; coun
     .map((c) => ({ front: c.front.trim(), back: c.back.trim(), example: c.example?.trim() ?? '', explanation: c.explanation?.trim() ?? '' }));
 }
 
+export async function aiAssist(front: string, back: string, action: string, language?: string) {
+  return api<{ text: string; front: string; back: string }>('/ai/assist', { body: { front, back, action, language } });
+}
+
 /** Offline, no-AI extraction of "term — definition" style lines. */
 export function quickExtract(text: string, max = 100): DraftCard[] {
   const out: DraftCard[] = [];

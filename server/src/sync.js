@@ -5,8 +5,8 @@ import { requireAuth } from './auth.js';
 // Columns the client may write, per table. user_id is always taken from the token.
 const TABLES = {
   folders: ['id', 'name', 'color', 'emoji', 'created_at', 'updated_at'],
-  decks: ['id', 'title', 'description', 'category', 'folder_id', 'cover', 'color', 'image', 'source_public_id', 'archived', 'preset', 'style', 'tts_front', 'tts_back', 'sort_order', 'created_at', 'updated_at'],
-  flashcards: ['id', 'deck_id', 'note_id', 'card_type', 'extra', 'frozen', 'front', 'back', 'example', 'explanation', 'image', 'difficult', 'bookmarked', 'reps', 'lapses', 'ease', 'interval', 'due', 'last_review', 'status', 'step', 'created_at', 'updated_at'],
+  decks: ['id', 'title', 'description', 'category', 'folder_id', 'cover', 'color', 'image', 'source_public_id', 'parent_id', 'archived', 'preset', 'style', 'tts_front', 'tts_back', 'sort_order', 'algorithm', 'offline', 'created_at', 'updated_at'],
+  flashcards: ['id', 'deck_id', 'note_id', 'card_type', 'extra', 'frozen', 'front', 'back', 'example', 'explanation', 'image', 'difficult', 'bookmarked', 'reps', 'lapses', 'ease', 'interval', 'due', 'last_review', 'status', 'step', 'stability', 'difficulty', 'created_at', 'updated_at'],
   review_logs: ['id', 'card_id', 'deck_id', 'rating', 'ts', 'duration_ms', 'prev_status', 'prev_interval', 'new_interval'],
   study_sessions: ['id', 'deck_id', 'started_at', 'ended_at', 'duration_ms', 'cards_reviewed', 'correct'],
   user_settings: ['data', 'updated_at'],
@@ -54,6 +54,13 @@ syncRouter.post('/', async (req, res) => {
       if (op.table === 'flashcards') {
         const own = await c.query('select 1 from decks where id=$1 and user_id=$2', [row.deck_id, uid]);
         if (!own.rowCount) continue; // deck was deleted or belongs to someone else
+      }
+      if (op.table === 'decks' && row.parent_id) {
+        if (row.parent_id === row.id) row.parent_id = null;
+        else {
+          const own = await c.query('select 1 from decks where id=$1 and user_id=$2', [row.parent_id, uid]);
+          if (!own.rowCount) row.parent_id = null;
+        }
       }
       if ((op.table === 'decks') && row.folder_id) {
         const own = await c.query('select 1 from folders where id=$1 and user_id=$2', [row.folder_id, uid]);

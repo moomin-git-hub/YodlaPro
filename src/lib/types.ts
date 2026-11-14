@@ -11,6 +11,10 @@ export interface Card {
   image: string; // URL or data URL
   difficult: boolean; // manually marked
   bookmarked: boolean;
+  cardType?: string; // 'basic' | 'cloze' | 'occlusion' (created on Android)
+  extra?: string;
+  noteId?: string;
+  frozen?: boolean;
   // SRS
   reps: number;
   lapses: number;
@@ -20,6 +24,8 @@ export interface Card {
   lastReview: number | null;
   status: CardStatus;
   step: number;
+  stability?: number; // FSRS memory stability (days)
+  difficulty?: number; // FSRS difficulty 1–10
   createdAt: number;
   updatedAt: number;
 }
@@ -30,6 +36,11 @@ export interface Deck {
   description: string;
   category: string;
   folderId: string | null;
+  parentId?: string | null;
+  algorithm?: 'fsrs' | 'sm2' | 'fast';
+  preset?: string;
+  archived?: boolean;
+  offline?: boolean;
   cover: string; // emoji
   color: string; // gradient key
   image: string;
@@ -38,7 +49,7 @@ export interface Deck {
   updatedAt: number;
 }
 
-export interface Folder { id: string; name: string; createdAt: number; updatedAt: number }
+export interface Folder { id: string; name: string; color?: string; emoji?: string; createdAt: number; updatedAt: number }
 
 export interface ReviewLog {
   id: string;
@@ -68,6 +79,9 @@ export type Theme = 'light' | 'dark' | 'system';
 export interface Settings {
   dailyGoal: number;
   newPerDay: number;
+  defaultAlgorithm?: 'fsrs' | 'sm2' | 'fast';
+  defaultPreset?: string;
+  customPreset?: import('./srs').SrsConfig;
   reminderEnabled: boolean;
   reminderTime: string; // HH:MM
   lang: Lang;

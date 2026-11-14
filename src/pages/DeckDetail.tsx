@@ -1,7 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Settings as Cog, Brain, MoreVertical } from 'lucide-react';
+import { AlgorithmSheet } from './DeckSettings';
+import { CardMenu } from '../components/CardMenu';
+import { algoFor } from '../lib/store';
 import { ArrowLeft, Play, Plus, Pencil, Download, Sparkles, Upload, Shuffle, Bookmark, AlertTriangle, CheckSquare, Trash2, RotateCcw, FolderInput, Globe, Dumbbell, Search, X, Inbox } from 'lucide-react';
-import { useData, updateCard, deleteCards, moveCards, resetProgress, updateSettings } from '../lib/store';
+import { useData, updateCard, deleteCards, moveCards, resetProgress, updateSettings, deckTree } from '../lib/store';
+import { DeckTree } from '../components/DeckTree';
+import { plainText } from '../lib/rich';
+import { FolderTree, CornerLeftUp } from 'lucide-react';
 import { useT } from '../lib/i18n';
 import { deckStats } from '../lib/stats';
 import { isHard, isMastered, isDue, formatDuration } from '../lib/srs';
@@ -22,18 +29,23 @@ export function DeckDetail() {
   const nav = useNavigate();
   const deck = d.decks.find((x) => x.id === id);
   const cards = useMemo(() => d.cards.filter((c) => c.deckId === id), [d.cards, id]);
-  const st = useMemo(() => deckStats(cards), [cards]);
+  const treeIds = useMemo(() => deckTree(id ?? '', d.decks), [d.decks, id]);
+  const allCards = useMemo(() => d.cards.filter((c) => treeIds.includes(c.deckId)), [d.cards, treeIds]);
+  const st = useMemo(() => deckStats(allCards), [allCards]);
+  const kids = useMemo(() => d.decks.filter((x) => x.parentId === id), [d.decks, id]);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sel, setSel] = useState<Set<string> | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [algoOpen, setAlgoOpen] = useState(false);
+  const [menuCard, setMenuCard] = useState<Card | null>(null);
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     return cards.filter((c) => {
-      if (s && !`${c.front} ${c.back} ${c.example} ${c.explanation}`.toLowerCase().includes(s)) return false;
+      if (s && !plainText(`${c.front} ${c.back} ${c.example} ${c.explanation}`).toLowerCase().includes(s)) return false;
       switch (filter) {
         case 'new': return c.status === 'new';
         case 'learning': return c.status !== 'new' && !isMastered(c);
@@ -50,7 +62,7 @@ export function DeckDetail() {
 
   const exportAs = (fmt: 'csv' | 'json') => {
     const safe = deck.title.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 40) || 'deck';
-    if (fmt === 'csv') download(`${safe}.csv`, '﻿question,answer,example,explanation\n' + cards.map((c) => [c.front, c.back, c.example, c.explanation].map(csvEscape).join(',')).join('\n'), 'text/csv');
+    if (fmt === 'csv') download(`${safe}.csv`, '﻿question,answer,example,explanation\n' + cards.map((c) => [plainText(c.front), plainText(c.back), c.example, c.explanation].map(csvEscape).join(',')).join('\n'), 'text/csv');
     else download(`${safe}.json`, JSON.stringify({ app: 'yodla', deck: { title: deck.title, description: deck.description, category: deck.category, cover: deck.cover, color: deck.color }, cards: cards.map(({ front, back, example, explanation }) => ({ front, back, example, explanation })) }, null, 2));
     setExportOpen(false);
   };
@@ -65,6 +77,7 @@ export function DeckDetail() {
         <div className="flex gap-1">
           <IconButton label={t('exportDeck')} onClick={() => setExportOpen(true)}><Download size={20} /></IconButton>
           <IconButton label={t('editDeck')} onClick={() => nav(`/deck/${deck.id}/edit`)}><Pencil size={20} /></IconButton>
+          <IconButton label={t('settings')} onClick={() => nav(`/deck/${deck.id}/settings`)}><Cog size={20} /></IconButton>
         </div>
       </div>
 
@@ -77,6 +90,7 @@ export function DeckDetail() {
           </div>
         </div>
         {deck.description && <p className="mt-3 text-sm leading-relaxed opacity-70">{deck.description}</p>}
+        <button onClick={() => setAlgoOpen(true)} className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-500/10 px-3 py-1.5 text-xs font-extrabold text-brand-600 dark:text-brand-300"><Brain size={14} />{t(algoFor(deck) === 'fsrs' ? 'algoFsrs' : algoFor(deck) === 'fast' ? 'algoFast' : 'algoSm2')}</button>
         <div className="mt-4 grid grid-cols-4 gap-2 text-center">
           {[[t('newCards'), st.new, 'text-sky-500'], [t('learning'), st.learning, 'text-amber-500'], [t('mastered'), st.mastered, 'text-emerald-500'], [t('due'), st.due, 'text-brand-500']].map(([l, v, c]) => (
             <div key={l as string} className="rounded-2xl bg-ink-900/[.04] py-2.5 dark:bg-white/5"><div className={cx('text-lg font-extrabold', c as string)}>{v}</div><div className="truncate px-1 text-[11px] font-semibold opacity-55">{l}</div></div>
@@ -84,9 +98,9 @@ export function DeckDetail() {
         </div>
         <div className="mt-4 flex items-center gap-3"><ProgressBar value={st.progress} className="flex-1" /><span className="text-sm font-extrabold">{st.progress}%</span></div>
         <div className="mt-5 flex gap-2">
-          <Button size="lg" block disabled={!cards.length} icon={<Play size={18} className="fill-white" />} onClick={() => nav(hasDue ? `/study/${deck.id}` : `/study/${deck.id}?practice=1`)}>{hasDue ? `${t('study')} · ${st.due + Math.min(st.new, d.settings.newPerDay)}` : t('practice')}</Button>
+          <Button size="lg" block disabled={!allCards.length} icon={<Play size={18} className="fill-white" />} onClick={() => nav(hasDue ? `/study/${deck.id}` : `/study/${deck.id}?practice=1`)}>{hasDue ? `${t('study')} · ${st.due + Math.min(st.new, d.settings.newPerDay)}` : t('practice')}</Button>
           <IconButton label={t('shuffle')} aria-pressed={d.settings.shuffle} onClick={() => { updateSettings({ shuffle: !d.settings.shuffle }); toast(`${t('shuffle')}: ${!d.settings.shuffle ? 'ON' : 'OFF'}`); }} className={cx('h-14 w-14 rounded-2xl', d.settings.shuffle ? 'bg-brand-500 text-white hover:bg-brand-600 dark:text-white' : 'card-surface')}><Shuffle size={20} /></IconButton>
-          {hasDue && cards.length > 0 && <IconButton label={t('practice')} onClick={() => nav(`/study/${deck.id}?practice=1`)} className="card-surface h-14 w-14 rounded-2xl"><Dumbbell size={20} /></IconButton>}
+          {hasDue && allCards.length > 0 && <IconButton label={t('practice')} onClick={() => nav(`/study/${deck.id}?practice=1`)} className="card-surface h-14 w-14 rounded-2xl"><Dumbbell size={20} /></IconButton>}
         </div>
       </section>
 
@@ -103,6 +117,18 @@ export function DeckDetail() {
         }}>{t('shareToExplore')}</Button>
       )}
 
+      {deck.parentId && d.decks.some((x) => x.id === deck.parentId) && (
+        <button onClick={() => nav(`/deck/${deck.parentId}`)} className="mt-3 flex items-center gap-1.5 text-sm font-semibold opacity-60 hover:opacity-100">
+          <CornerLeftUp size={15} />{d.decks.find((x) => x.id === deck.parentId)?.title}
+        </button>
+      )}
+      <section className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-extrabold"><FolderTree size={18} className="text-brand-500" />{t('subdecks')}{kids.length > 0 && <span className="opacity-50">· {kids.length}</span>}</h2>
+          <Button size="sm" variant="soft" icon={<Plus size={16} />} onClick={() => nav(`/deck/new?parent=${deck.id}${deck.folderId ? `&folder=${deck.folderId}` : ''}`)}>{t('addSubdeck')}</Button>
+        </div>
+        {kids.length > 0 && <DeckTree data={d} decks={kids} />}
+      </section>
       <section className="mt-6">
         <div className="relative mb-3">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 opacity-40" />
@@ -123,7 +149,7 @@ export function DeckDetail() {
           <Empty icon={<Inbox size={28} />} title={t('emptyDeck')} sub={t('emptyDeckSub')} action={<Button icon={<Plus size={18} />} onClick={() => nav(`/card/new?deck=${deck.id}`)}>{t('addCard')}</Button>} />
         ) : shown.length === 0 ? <p className="py-10 text-center text-sm opacity-50">{t('noResults')}</p> : (
           <ul className="space-y-2">
-            {shown.slice(0, 400).map((c) => <CardRow key={c.id} c={c} sel={sel} toggle={toggle} />)}
+            {shown.slice(0, 400).map((c) => <CardRow key={c.id} c={c} sel={sel} toggle={toggle} onMenu={() => setMenuCard(c)} />)}
           </ul>
         )}
       </section>
@@ -138,6 +164,8 @@ export function DeckDetail() {
         </div>
       )}
 
+      <AlgorithmSheet deck={deck} open={algoOpen} onClose={() => setAlgoOpen(false)} />
+      <CardMenu card={menuCard} data={d} open={!!menuCard} onClose={() => setMenuCard(null)} onSelect={() => menuCard && setSel(new Set([menuCard.id]))} />
       <Sheet open={moveOpen} onClose={() => setMoveOpen(false)} title={t('chooseDeck')}>
         <div className="space-y-2">
           {d.decks.filter((x) => x.id !== deck.id).map((x) => (
@@ -162,7 +190,7 @@ function QuickAction({ icon, label, onClick }: { icon: React.ReactNode; label: s
   return <button onClick={onClick} className="card-surface flex flex-col items-center gap-1.5 rounded-3xl py-3.5 text-xs font-bold transition active:scale-95"><span className="text-brand-500 dark:text-brand-300">{icon}</span>{label}</button>;
 }
 
-function CardRow({ c, sel, toggle }: { c: Card; sel: Set<string> | null; toggle: (id: string) => void }) {
+function CardRow({ c, sel, toggle, onMenu }: { c: Card; sel: Set<string> | null; toggle: (id: string) => void; onMenu: () => void }) {
   const { t } = useT();
   const status = c.status === 'new' ? ['newCards', 'bg-sky-500'] : isMastered(c) ? ['mastered', 'bg-emerald-500'] : ['learning', 'bg-amber-500'];
   const inner = (
@@ -170,8 +198,8 @@ function CardRow({ c, sel, toggle }: { c: Card; sel: Set<string> | null; toggle:
       {sel && <span className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-lg border-2', sel.has(c.id) ? 'border-brand-500 bg-brand-500 text-white' : 'border-ink-900/20 dark:border-white/20')}>{sel.has(c.id) && '✓'}</span>}
       {c.image && <img src={c.image} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-bold">{c.front}</p>
-        <p className="truncate text-sm opacity-60">{c.back}</p>
+        <p className="truncate text-[15px] font-bold">{c.cardType === 'reverse' && <span className="mr-1 text-brand-500">⇄</span>}{c.frozen && <span className="mr-1">❄</span>}{plainText(c.cardType === 'reverse' ? c.back : c.front) || '🖼'}</p>
+        <p className="truncate text-sm opacity-60">{plainText(c.cardType === 'reverse' ? c.front : c.back)}</p>
         <p className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold opacity-60">
           <span className={cx('h-1.5 w-1.5 rounded-full', status[1])} />{t(status[0] as 'newCards')}
           {c.status !== 'new' && <> · {t('nextReview')}: {c.due <= Date.now() ? t('today') : formatDuration(c.due - Date.now())}</>}
@@ -187,6 +215,7 @@ function CardRow({ c, sel, toggle }: { c: Card; sel: Set<string> | null; toggle:
         <>
           <IconButton label={c.bookmarked ? t('removeBookmark') : t('bookmark')} onClick={() => updateCard(c.id, { bookmarked: !c.bookmarked })} className={c.bookmarked ? 'text-amber-500 dark:text-amber-400' : 'opacity-40'}><Bookmark size={18} className={c.bookmarked ? 'fill-current' : ''} /></IconButton>
           <IconButton label={c.difficult ? t('unmarkDifficult') : t('markDifficult')} onClick={() => updateCard(c.id, { difficult: !c.difficult })} className={c.difficult ? 'text-rose-500 dark:text-rose-400' : 'opacity-40'}><AlertTriangle size={18} className={c.difficult ? 'fill-current/20' : ''} /></IconButton>
+          <IconButton label="Menu" onClick={onMenu} className="opacity-50"><MoreVertical size={18} /></IconButton>
         </>
       )}
     </li>

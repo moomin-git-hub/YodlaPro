@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search as SearchIcon, X } from 'lucide-react';
 import { useData } from '../lib/store';
 import { useT } from '../lib/i18n';
+import { plainText } from '../lib/rich';
 import { DeckCover, IconButton, useAutoFocus } from '../components/ui';
 
 function Hl({ text, q }: { text: string; q: string }) {
@@ -22,7 +23,7 @@ export function SearchPage() {
     const s = q.trim().toLowerCase();
     if (s.length < 1) return null;
     const decks = d.decks.filter((x) => `${x.title} ${x.description}`.toLowerCase().includes(s)).slice(0, 10);
-    const cards = d.cards.filter((c) => `${c.front} ${c.back} ${c.example} ${c.explanation}`.toLowerCase().includes(s)).slice(0, 100);
+    const cards = d.cards.filter((c) => plainText(`${c.front} ${c.back}`) + ` ${c.example} ${c.explanation}`.toLowerCase().includes(s)).slice(0, 100);
     return { decks, cards };
   }, [q, d]);
   const deckOf = (id: string) => d.decks.find((x) => x.id === id);
@@ -51,8 +52,8 @@ export function SearchPage() {
               <section><h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider opacity-45">{res.cards.length} {t('cards')}</h2>
                 <ul className="space-y-2">{res.cards.map((c) => (
                   <li key={c.id}><Link to={`/card/${c.id}/edit`} className="card-surface block rounded-2xl p-3.5">
-                    <p className="font-bold"><Hl text={c.front} q={q.trim()} /></p>
-                    <p className="line-clamp-2 text-sm opacity-65"><Hl text={c.back} q={q.trim()} /></p>
+                    <p className="font-bold"><Hl text={plainText(c.front)} q={q.trim()} /></p>
+                    <p className="line-clamp-2 text-sm opacity-65"><Hl text={plainText(c.back)} q={q.trim()} /></p>
                     <p className="mt-1 text-[11px] font-semibold opacity-45">{deckOf(c.deckId)?.cover} {deckOf(c.deckId)?.title}</p>
                   </Link></li>
                 ))}</ul>
