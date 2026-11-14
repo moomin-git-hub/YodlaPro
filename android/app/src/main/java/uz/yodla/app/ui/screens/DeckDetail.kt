@@ -102,7 +102,8 @@ fun DeckScreen(nav: NavHostController, id: String) {
             }
         }
     }
-    val hasWork = st.due > 0 || (st.new > 0 && allCards.any { it.status == Status.NEW && !it.frozen })
+    val n = remember(d, deck.id) { repo.todayCount(deck.id) }
+    val hasWork = n > 0 || allCards.any { it.status == Status.NEW && !it.frozen }
     val ids = sel?.toList().orEmpty()
 
     Box(Modifier.fillMaxSize()) {
@@ -143,8 +144,7 @@ fun DeckScreen(nav: NavHostController, id: String) {
                     Row(verticalAlignment = Alignment.CenterVertically) { YProgress(st.progress, Modifier.weight(1f)); Spacer(Modifier.width(10.dp)); Text("${st.progress}%", fontWeight = FontWeight.ExtraBold) }
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val cfg = repo.presetFor(deck)
-                        PrimaryButton(if (hasWork) "${stringResource(R.string.study)} · ${st.due + minOf(st.new, cfg.newPerDay)}" else stringResource(R.string.practice),
+                        PrimaryButton(if (hasWork) stringResource(R.string.study) + (if (n > 0) " · $n" else "") else stringResource(R.string.practice),
                             { nav.go(if (hasWork) "study/${deck.id}" else "study/${deck.id}?practice=true") }, Modifier.weight(1f), enabled = allCards.isNotEmpty(), icon = Icons.Rounded.PlayArrow)
                         FilledTonalIconButton({ repo.updateSettings { it.copy(shuffle = !it.shuffle) }; toast(ctx.getString(R.string.shuffle) + ": " + if (!d.settings.shuffle) "ON" else "OFF") },
                             Modifier.size(52.dp), colors = if (d.settings.shuffle) IconButtonDefaults.filledTonalIconButtonColors(Brand, Color.White) else IconButtonDefaults.filledTonalIconButtonColors()) { Icon(Icons.Rounded.Shuffle, stringResource(R.string.shuffle)) }

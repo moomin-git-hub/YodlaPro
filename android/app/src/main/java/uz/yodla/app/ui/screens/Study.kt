@@ -66,6 +66,7 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
     var saved by remember { mutableStateOf(false) }
     var empty by remember { mutableStateOf(queue.isEmpty) }
     var menu by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
 
     /** Move to the next card that is really due (learning cards wait for their step time). */
@@ -118,7 +119,8 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
 
     fun rate(r: Int) {
         val c = card ?: return; val it = item ?: return
-        if (!flipped) return
+        if (!flipped || busy) return
+        busy = true // ignore double taps / swipe+tap while this answer is saved
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         history += Snap(if (it.mode == QItem.MODE_PRACTICE) null else c, queue, it, reviewed, correct, doneCount)
         if (history.size > 50) history.removeAt(0)
@@ -131,6 +133,7 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
             }
             reviewed++; if (r >= 3) correct++; doneCount++
             advance(q)
+            busy = false
         }
     }
     fun undo() {
@@ -159,13 +162,16 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding().then(keys)) {
         when {
-            empty -> CaughtUp(onBack = { exit() }, onPractice = {
-                val q = repo.buildQueue(target, true)
-                if (!q.isEmpty) { empty = false; advance(q) }
-            }, canPractice = !repo.buildQueue(target, true).isEmpty)
+            empty -> {
+                val more = remember(d.cards.size, d.reviews.size) { repo.moreNew(target, emptySet()) }
+                CaughtUp(onBack = { exit() }, onPractice = {
+                    val q = repo.buildQueue(target, true)
+                    if (!q.isEmpty) { empty = false; advance(q) }
+                }, canPractice = !repo.buildQueue(target, true).isEmpty, moreCount = more.size, onMore = { empty = false; advance(StudyQueue(more)) })
+            }
             finished -> Summary(title, reviewed, correct, now() - started, history.isNotEmpty(), ::undo, onMore = {
                 saved = false; started = now(); reviewed = 0; correct = 0; doneCount = 0; history.clear()
-                val q = repo.buildQueue(target, false).let { if (it.isEmpty) repo.buildQueue(target, true) else it }
+                val q = repo.buildQueue(target, false).let { if (it.isEmpty) StudyQueue(repo.moreNew(target, emptySet())) else it }.let { if (it.isEmpty) repo.buildQueue(target, true) else it }
                 advance(q)
             }, onDone = { exit() })
             waitUntil != null -> {
@@ -307,16 +313,21 @@ private fun SmallIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 }
 
 @Composable
-private fun CaughtUp(onBack: () -> Unit, onPractice: () -> Unit, canPractice: Boolean) {
+private fun CaughtUp(onBack: () -> Unit, onPractice: () -> Unit, canPractice: Boolean, moreCount: Int, onMore: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("🎉", fontSize = 56.sp)
         Spacer(Modifier.height(12.dp))
         Text(stringResource(R.string.allCaughtUp), style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.allCaughtUpSub), style = Muted, textAlign = TextAlign.Center)
         Spacer(Modifier.height(28.dp))
+        if (moreCount > 0) {
+            PrimaryButton(stringResource(R.string.learnMoreNew, moreCount), onMore, Modifier.fillMaxWidth().height(56.dp))
+            Spacer(Modifier.height(10.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SecondaryButton(stringResource(R.string.backToDeck), onBack, Modifier.weight(1f))
-            PrimaryButton(stringResource(R.string.practice), onPractice, Modifier.weight(1f), enabled = canPractice)
+            if (moreCount > 0) SecondaryButton(stringResource(R.string.practice), onPractice, Modifier.weight(1f), enabled = canPractice)
+            else PrimaryButton(stringResource(R.string.practice), onPractice, Modifier.weight(1f), enabled = canPractice)
         }
     }
 }

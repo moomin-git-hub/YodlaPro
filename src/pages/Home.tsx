@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Flame, Clock, CheckCircle2, CalendarClock, Play, ChevronRight, Sparkles, Layers, PartyPopper } from 'lucide-react';
 import { useData } from '../lib/store';
+import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { getUser } from '../lib/auth';
 import { isDue } from '../lib/srs';
@@ -18,7 +19,7 @@ export function Home() {
   const s = useMemo(() => {
     const today = todayStats(d);
     const due = d.cards.filter((c) => isDue(c)).length;
-    const newAvail = Math.min(Math.max(0, d.settings.newPerDay - today.newIntroduced), d.cards.filter((c) => c.status === 'new').length);
+    const newAvail = Math.max(0, todayCount(d, 'all') - d.cards.filter((c) => isDue(c) && c.status === 'review').length);
     const learned = d.cards.filter((c) => c.status !== 'new').length;
     const counts = dayCounts(d);
     const week = lastNDays(7);

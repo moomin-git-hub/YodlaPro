@@ -43,6 +43,7 @@ export function Study() {
   const started = useRef(Date.now());
   const shownAt = useRef(Date.now());
   const saved = useRef(false);
+  const busy = useRef(false); // ignores a double click / key repeat while an answer is being saved
 
   /** Show the next card that is really due; learning cards wait for their step time. */
   const advance = useCallback((q: StudyQueue, force = false) => {
@@ -79,7 +80,8 @@ export function Study() {
   }, [waitUntil, queue, advance]);
 
   const rate = useCallback((r: Rating) => {
-    if (!card || !item || !flipped) return;
+    if (!card || !item || !flipped || busy.current) return;
+    busy.current = true;
     setHistory((h) => [...h.slice(-50), { prev: item.mode === 'practice' ? null : card, queue, current: item, stats }]);
     let q = queue;
     if (item.mode === 'practice') { if (r === 1) q = requeue(q, item); }
@@ -91,6 +93,7 @@ export function Study() {
     }
     setStats((s) => ({ reviewed: s.reviewed + 1, correct: s.correct + (r >= 3 ? 1 : 0), done: s.done + 1 }));
     advance(q);
+    setTimeout(() => { busy.current = false; }, 0);
     if (navigator.vibrate) navigator.vibrate(8);
   }, [card, item, flipped, queue, stats, advance]);
 
@@ -146,6 +149,7 @@ export function Study() {
     );
   }
 
+  const moreNow = empty ? moreNew(data, target, new Set()) : [];
   if (empty) {
     return (
       <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center px-6 text-center">
@@ -154,8 +158,9 @@ export function Study() {
         <p className="mt-2 opacity-60">{t('allCaughtUpSub')}</p>
         <div className="mt-8 flex w-full gap-3">
           <Button variant="secondary" block onClick={() => nav(-1)}>{t('backToDeck')}</Button>
-          <Button block onClick={() => { const q = buildQueue(getData(), target, true); if (!isEmpty(q)) { setEmpty(false); advance(q); } }} disabled={isEmpty(buildQueue(data, target, true))}>{t('practice')}</Button>
+          <Button variant={moreNow.length ? 'secondary' : undefined} block onClick={() => { const q = buildQueue(getData(), target, true); if (!isEmpty(q)) { setEmpty(false); advance(q); } }} disabled={isEmpty(buildQueue(data, target, true))}>{t('practice')}</Button>
         </div>
+        {moreNow.length > 0 && <Button size="lg" block className="mt-3" onClick={() => { setEmpty(false); advance({ main: moreNow, learn: [] }); }}>{t('learnMoreNew', { n: moreNow.length })}</Button>}
       </div>
     );
   }
@@ -177,7 +182,7 @@ export function Study() {
         </div>
         <div className="mt-8 flex w-full gap-3">
           {history.length > 0 && <IconButton label={t('undo')} onClick={undo} className="card-surface h-12 w-12 shrink-0 rounded-2xl"><Undo2 size={20} /></IconButton>}
-          <Button variant="secondary" size="lg" block onClick={() => { saved.current = false; started.current = Date.now(); const q = buildQueue(getData(), target, false); setStats({ reviewed: 0, correct: 0, done: 0 }); setHistory([]); advance(isEmpty(q) ? buildQueue(getData(), target, true) : q); }}>{t('studyMore')}</Button>
+          <Button variant="secondary" size="lg" block onClick={() => { saved.current = false; started.current = Date.now(); const q0 = buildQueue(getData(), target, false); const q = isEmpty(q0) ? { main: moreNew(getData(), target, new Set()), learn: [] } : q0; setStats({ reviewed: 0, correct: 0, done: 0 }); setHistory([]); advance(isEmpty(q) ? buildQueue(getData(), target, true) : q); }}>{t('studyMore')}</Button>
           <Button size="lg" block onClick={() => nav(-1)}>{t('backToDeck')}</Button>
         </div>
       </div>

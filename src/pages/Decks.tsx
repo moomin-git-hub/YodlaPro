@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Plus, FolderPlus, Search, AlertTriangle, Bookmark, Layers, ArrowLeft, Settings, Trash2, Play } from 'lucide-react';
 import { useData, saveFolder, deleteFolder, deckTree } from '../lib/store';
+import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { isHard } from '../lib/srs';
 import { COLORS } from '../lib/catalog';
 import { cx } from '../lib/util';
 import type { Folder } from '../lib/types';
-import { DeckTree, FolderRow, treeStats } from '../components/DeckTree';
+import { DeckTree, FolderRow } from '../components/DeckTree';
 import { Button, Empty, IconButton, PageHeader, Sheet, Field, confirmDialog, toast } from '../components/ui';
 
 const FOLDER_EMOJI = ['📁', '📚', '🗣️', '🎓', '🧪', '💼', '🏨', '🩺', '💻', '🌍', '⭐', '🔥', '🇬🇧', '🇷🇺', '🇸🇦', '📖'];
@@ -77,7 +78,7 @@ export function FolderPage() {
   const folder = d.folders.find((f) => f.id === id);
   const decks = useMemo(() => d.decks.filter((x) => x.folderId === id && !x.parentId && !x.archived).sort((a, b) => b.updatedAt - a.updatedAt), [d.decks, id]);
   if (!folder) return <Empty icon={<Layers size={28} />} title={t('notFound')} action={<Button onClick={() => nav('/decks')}>{t('decks')}</Button>} />;
-  const due = decks.reduce((a, x) => { const s = treeStats(d, x.id); return a + s.due + Math.min(s.new, d.settings.newPerDay); }, 0);
+  const due = todayCount(d, `folder:${id}`);
   const allIds = decks.flatMap((x) => deckTree(x.id, d.decks));
 
   return (

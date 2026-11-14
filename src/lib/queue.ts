@@ -51,10 +51,10 @@ export function buildQueue(d: UserData, target: string, practice: boolean, now =
   const mix = <T,>(l: T[]) => (d.settings.shuffle ? shuffle(l) : l);
   if (practice) return { main: mix([...pool].sort((a, b) => a.createdAt - b.createdAt)).map((c) => ({ id: c.id, mode: 'practice' as const })), learn: [] };
 
-  const today = startOfDay(now), eod = endOfToday(now);
-  const todayLogs = d.reviews.filter((r) => r.ts >= today);
-  const reviewedToday = new Set(todayLogs.map((r) => r.cardId));
-  const touchedNotes = new Set(d.cards.filter((c) => reviewedToday.has(c.id)).map((c) => c.noteId ?? c.id));
+  const eod = endOfToday(now);
+  const info = todayInfo(d, now);
+  const touchedNotes = new Set(info.touchedNotes);
+  const shuffleOn = d.settings.shuffle;
   const due: Card[] = [], fresh: Card[] = [], learn: Learn[] = [], fast: Card[] = [];
   const byDeck = new Map<string, Card[]>();
   pool.forEach((c) => byDeck.set(c.deckId, [...(byDeck.get(c.deckId) ?? []), c]));
@@ -65,12 +65,13 @@ export function buildQueue(d: UserData, target: string, practice: boolean, now =
       continue;
     }
     const cfg = presetFor(deck);
-    const logs = todayLogs.filter((r) => r.deckId === deckId);
-    const newRoom = Math.max(0, cfg.newPerDay - logs.filter((r) => r.prevStatus === 'new').length);
-    const revRoom = Math.max(0, cfg.maxReviewsPerDay - logs.filter((r) => r.prevStatus === 'review').length);
+    const newRoom = Math.max(0, cfg.newPerDay - (info.newIntroduced.get(deckId) ?? 0));
+    const revRoom = Math.max(0, cfg.maxReviewsPerDay - (info.reviewsDone.get(deckId) ?? 0));
     cards.filter((c) => (c.status === 'learning' || c.status === 'relearning') && c.due <= eod).forEach((c) => learn.push({ id: c.id, due: c.due }));
     due.push(...cards.filter((c) => c.status === 'review' && c.due <= eod).sort((a, b) => a.due - b.due).slice(0, revRoom));
-    fresh.push(...cards.filter((c) => c.status === 'new').sort((a, b) => a.createdAt - b.createdAt).filter((c) => {
+    // shuffle on → random new words from the whole deck; off → in deck order
+    const candidates = cards.filter((c) => c.status === 'new');
+    fresh.push(...(shuffleOn ? shuffle(candidates) : candidates.sort((a, b) => a.createdAt - b.createdAt)).filter((c) => {
       const n = c.noteId ?? c.id;
       if (touchedNotes.has(n)) return false;
       touchedNotes.add(n); return true;
@@ -102,11 +103,26 @@ export function moreNew(d: UserData, target: string, exclude: Set<string>, n = 1
     : target === 'difficult' || target === 'bookmarks' ? new Set<string>()
     : target.startsWith('folder:') ? new Set(d.decks.filter((x) => x.folderId === target.slice(7) && !x.parentId).flatMap((x) => deckTree(x.id, d.decks)))
     : new Set(deckTree(target, d.decks));
-  const today = startOfDay(Date.now());
-  const reviewed = new Set(d.reviews.filter((r) => r.ts >= today).map((r) => r.cardId));
-  const touched = new Set(d.cards.filter((c) => exclude.has(c.id) || reviewed.has(c.id)).map((c) => c.noteId ?? c.id));
-  return d.cards.filter((c) => scope.has(c.deckId) && active.has(c.deckId) && c.status === 'new' && !c.frozen && !exclude.has(c.id))
-    .sort((a, b) => a.createdAt - b.createdAt)
+  const touched = new Set([...todayInfo(d).touchedNotes, ...d.cards.filter((c) => exclude.has(c.id)).map((c) => c.noteId ?? c.id)]);
+  const pool = d.cards.filter((c) => scope.has(c.deckId) && active.has(c.deckId) && c.status === 'new' && !c.frozen && !exclude.has(c.id));
+  return (d.settings.shuffle ? shuffle(pool) : pool.sort((a, b) => a.createdAt - b.createdAt))
     .filter((c) => { const k = c.noteId ?? c.id; if (touched.has(k)) return false; touched.add(k); return true; })
     .slice(0, n).map((c) => ({ id: c.id, mode: 'srs' as const }));
+}
+
+/**
+ * What happened today, counted against cards' CURRENT state: a card whose progress was reset after it was
+ * studied today is new again and no longer uses up today's new-word limit (same as Repo.todayInfo on Android).
+ */
+export function todayInfo(d: UserData, now = Date.now()) {
+  const today = startOfDay(now);
+  const byId = new Map(d.cards.map((c) => [c.id, c]));
+  const logs = d.reviews.filter((r) => r.ts >= today);
+  const studied = new Map<string, Card>();
+  logs.forEach((r) => { const c = byId.get(r.cardId); if (c && c.status !== 'new') studied.set(c.id, c); });
+  const newIds = new Set(logs.filter((r) => r.prevStatus === 'new').map((r) => r.cardId));
+  const newIntroduced = new Map<string, number>(), reviewsDone = new Map<string, number>();
+  studied.forEach((c) => { if (newIds.has(c.id)) newIntroduced.set(c.deckId, (newIntroduced.get(c.deckId) ?? 0) + 1); });
+  logs.forEach((r) => { if (r.prevStatus === 'review') reviewsDone.set(r.deckId, (reviewsDone.get(r.deckId) ?? 0) + 1); });
+  return { newIntroduced, reviewsDone, touchedNotes: new Set([...studied.values()].map((c) => c.noteId ?? c.id)) };
 }

@@ -63,6 +63,24 @@ class Repo(val ctx: Context, val db: YodlaDb = YodlaDb.create(ctx)) {
         return base.copy(newPerDay = s.newPerDay) // one global, user-adjustable "new words per day"
     }
 
+    /**
+     * What happened today, counted against cards' CURRENT state: a card whose progress was reset after it was
+     * studied today is new again and no longer uses up today's new-word limit.
+     */
+    class TodayInfo(val newIntroduced: Map<String, Int>, val reviewsDone: Map<String, Int>, val touchedNotes: Set<String>)
+    fun todayInfo(d: AppData, now: Long = now()): TodayInfo {
+        val today = Srs.startOfDay(now)
+        val byId = d.cards.associateBy { it.id }
+        val logs = d.reviews.filter { it.ts >= today }
+        val studied = logs.mapNotNull { byId[it.cardId] }.filter { it.status != Status.NEW }.distinctBy { it.id }
+        val newIds = logs.filter { it.prevStatus == Status.NEW }.map { it.cardId }.toSet()
+        return TodayInfo(
+            newIntroduced = studied.filter { it.id in newIds }.groupingBy { it.deckId }.eachCount(),
+            reviewsDone = logs.filter { it.prevStatus == Status.REVIEW }.groupingBy { it.deckId }.eachCount(),
+            touchedNotes = studied.map { it.noteId }.toSet(),
+        )
+    }
+
     /** Next [n] new cards of [target] that are not in the session yet — "learn more" beyond today's limit. */
     fun moreNew(target: String, exclude: Set<String>, n: Int = 10): List<QItem> {
         val d = data.value
@@ -73,10 +91,10 @@ class Repo(val ctx: Context, val db: YodlaDb = YodlaDb.create(ctx)) {
             target.startsWith("folder:") -> d.decks.filter { it.folderId == target.removePrefix("folder:") && it.parentId == null }.flatMap { tree(it.id) }.toSet()
             else -> tree(target).toSet()
         } intersect active
-        val today = Srs.startOfDay(now())
-        val touched = d.cards.filter { c -> c.id in exclude || d.reviews.any { it.cardId == c.id && it.ts >= today } }.map { it.noteId }.toMutableSet()
+        val touched = (todayInfo(d).touchedNotes + d.cards.filter { it.id in exclude }.map { it.noteId }).toMutableSet()
         return d.cards.filter { it.deckId in scope && it.status == Status.NEW && !it.frozen && it.id !in exclude }
-            .sortedBy { it.createdAt }.filter { touched.add(it.noteId) }.take(n).map { QItem(it.id) }
+            .let { l -> if (d.settings.shuffle) l.shuffled() else l.sortedBy { it.createdAt } }
+            .filter { touched.add(it.noteId) }.take(n).map { QItem(it.id) }
     }
 
     // ---------------- decks & folders ----------------
@@ -268,10 +286,9 @@ class Repo(val ctx: Context, val db: YodlaDb = YodlaDb.create(ctx)) {
         fun <T> mix(l: List<T>) = if (shuffle) l.shuffled() else l
         if (practice) return StudyQueue(mix(pool.sortedBy { it.createdAt }).map { QItem(it.id, QItem.MODE_PRACTICE) })
 
-        val today = Srs.startOfDay(now)
         val eod = Srs.endOfToday(now)
-        val todayLogs = d.reviews.filter { it.ts >= today }
-        val touchedNotes = d.cards.filter { c -> todayLogs.any { it.cardId == c.id } }.map { it.noteId }.toMutableSet()
+        val t = todayInfo(d, now)
+        val touchedNotes = t.touchedNotes.toMutableSet()
         val due = mutableListOf<Card>(); val fresh = mutableListOf<Card>(); val learning = mutableListOf<Learn>(); val fast = mutableListOf<Card>()
         pool.groupBy { it.deckId }.forEach { (deckId, cards) ->
             val deck = d.deck(deckId)
@@ -281,12 +298,13 @@ class Repo(val ctx: Context, val db: YodlaDb = YodlaDb.create(ctx)) {
                 return@forEach
             }
             val cfg = presetFor(deck)
-            val logs = todayLogs.filter { it.deckId == deckId }
-            val newRoom = (cfg.newPerDay - logs.count { it.prevStatus == Status.NEW }).coerceAtLeast(0)
-            val revRoom = (cfg.maxReviewsPerDay - logs.count { it.prevStatus == Status.REVIEW }).coerceAtLeast(0)
+            val newRoom = (cfg.newPerDay - (t.newIntroduced[deckId] ?: 0)).coerceAtLeast(0)
+            val revRoom = (cfg.maxReviewsPerDay - (t.reviewsDone[deckId] ?: 0)).coerceAtLeast(0)
             cards.filter { (it.status == Status.LEARNING || it.status == Status.RELEARNING) && it.due <= eod }.forEach { learning += Learn(it.id, it.due) }
             due += cards.filter { it.status == Status.REVIEW && it.due <= eod }.sortedBy { it.due }.take(revRoom)
-            fresh += cards.filter { it.status == Status.NEW }.sortedBy { it.createdAt }.filter { touchedNotes.add(it.noteId) }.take(newRoom)
+            // shuffle on → random new words from the whole deck; off → in deck order
+            val candidates = cards.filter { it.status == Status.NEW }.let { l -> if (shuffle) l.shuffled() else l.sortedBy { it.createdAt } }
+            fresh += candidates.filter { touchedNotes.add(it.noteId) }.take(newRoom)
         }
         val r = mix(due.sortedBy { it.due }); val n = mix(fresh)
         val out = mutableListOf<QItem>()

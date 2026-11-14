@@ -52,10 +52,10 @@ object Stats {
     fun lastDays(n: Int): List<Long> { val base = Srs.startOfDay(now()); return (n - 1 downTo 0).map { Srs.startOfDay(base - it * DAY_MS + DAY_MS / 2) } }
 
     fun newAvailable(d: AppData, repo: Repo): Int {
-        val today = Srs.startOfDay(now())
+        val t = repo.todayInfo(d)
         return d.decks.filter { !it.archived && it.algorithm != Algo.FAST }.sumOf { deck ->
             val cfg = repo.presetFor(deck)
-            val introduced = d.reviews.count { it.deckId == deck.id && it.ts >= today && it.prevStatus == Status.NEW }
+            val introduced = t.newIntroduced[deck.id] ?: 0
             minOf((cfg.newPerDay - introduced).coerceAtLeast(0), d.cards.count { it.deckId == deck.id && it.status == Status.NEW && !it.frozen })
         }
     }

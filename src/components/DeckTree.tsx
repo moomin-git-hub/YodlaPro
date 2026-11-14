@@ -4,6 +4,7 @@ import { ChevronRight, Minus, Plus, PlusCircle, Settings, Trash2, Clock, Folder 
 import type { Deck, Folder, UserData } from '../lib/types';
 import { deckTree, deleteDeck, deleteFolder } from '../lib/store';
 import { deckStats } from '../lib/stats';
+import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { ls, cx } from '../lib/util';
 import { COLORS } from '../lib/catalog';
@@ -34,7 +35,7 @@ function DeckNode({ data, deck, depth, open, toggle }: { data: UserData; deck: D
   const kids = useMemo(() => data.decks.filter((x) => x.parentId === deck.id).sort((a, b) => a.title.localeCompare(b.title)), [data.decks, deck.id]);
   const st = useMemo(() => treeStats(data, deck.id), [data, deck.id]);
   const isOpen = open.includes(deck.id);
-  const toStudy = st.due + Math.min(st.new, data.settings.newPerDay);
+  const toStudy = useMemo(() => todayCount(data, deck.id), [data, deck.id]);
   return (
     <div className={cx('overflow-hidden rounded-[22px]', depth === 0 ? 'card-surface' : '')}>
       <div className="group relative flex cursor-pointer items-center gap-3 p-3 pr-2 transition hover:bg-ink-900/[.03] dark:hover:bg-white/[.04]" onClick={() => nav(`/deck/${deck.id}`)}>
@@ -78,7 +79,7 @@ export function FolderRow({ data, folder, onEdit }: { data: UserData; folder: Fo
   const { t } = useT();
   const nav = useNavigate();
   const decks = data.decks.filter((d) => d.folderId === folder.id && !d.parentId);
-  const due = decks.reduce((a, d) => { const s = treeStats(data, d.id); return a + s.due + Math.min(s.new, data.settings.newPerDay); }, 0);
+  const due = useMemo(() => todayCount(data, `folder:${folder.id}`), [data, folder.id]);
   return (
     <div className="card-surface group flex cursor-pointer items-center gap-3 rounded-[22px] p-3 pr-2 transition hover:bg-ink-900/[.03] dark:hover:bg-white/[.04]" onClick={() => nav(`/folder/${folder.id}`)}>
       <div className={cx('grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br text-2xl', COLORS[folder.color ?? 'violet'] ?? COLORS.violet)}>

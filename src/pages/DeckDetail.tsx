@@ -9,6 +9,7 @@ import { useData, updateCard, deleteCards, moveCards, resetProgress, updateSetti
 import { DeckTree } from '../components/DeckTree';
 import { plainText } from '../lib/rich';
 import { FolderTree, CornerLeftUp } from 'lucide-react';
+import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { deckStats } from '../lib/stats';
 import { isHard, isMastered, isDue, formatDuration } from '../lib/srs';
@@ -68,7 +69,8 @@ export function DeckDetail() {
   };
   const toggle = (cid: string) => setSel((s) => { const n = new Set(s); n.has(cid) ? n.delete(cid) : n.add(cid); return n; });
   const ids = [...(sel ?? [])];
-  const hasDue = st.due > 0 || st.new > 0;
+  const toDo = useMemo(() => todayCount(d, id ?? ''), [d, id]);
+  const hasDue = toDo > 0 || allCards.some((c) => c.status === 'new' && !c.frozen);
 
   return (
     <div>
@@ -98,7 +100,7 @@ export function DeckDetail() {
         </div>
         <div className="mt-4 flex items-center gap-3"><ProgressBar value={st.progress} className="flex-1" /><span className="text-sm font-extrabold">{st.progress}%</span></div>
         <div className="mt-5 flex gap-2">
-          <Button size="lg" block disabled={!allCards.length} icon={<Play size={18} className="fill-white" />} onClick={() => nav(hasDue ? `/study/${deck.id}` : `/study/${deck.id}?practice=1`)}>{hasDue ? `${t('study')} · ${st.due + Math.min(st.new, d.settings.newPerDay)}` : t('practice')}</Button>
+          <Button size="lg" block disabled={!allCards.length} icon={<Play size={18} className="fill-white" />} onClick={() => nav(hasDue ? `/study/${deck.id}` : `/study/${deck.id}?practice=1`)}>{hasDue ? `${t('study')}${toDo > 0 ? ` · ${toDo}` : ''}` : t('practice')}</Button>
           <IconButton label={t('shuffle')} aria-pressed={d.settings.shuffle} onClick={() => { updateSettings({ shuffle: !d.settings.shuffle }); toast(`${t('shuffle')}: ${!d.settings.shuffle ? 'ON' : 'OFF'}`); }} className={cx('h-14 w-14 rounded-2xl', d.settings.shuffle ? 'bg-brand-500 text-white hover:bg-brand-600 dark:text-white' : 'card-surface')}><Shuffle size={20} /></IconButton>
           {hasDue && allCards.length > 0 && <IconButton label={t('practice')} onClick={() => nav(`/study/${deck.id}?practice=1`)} className="card-surface h-14 w-14 rounded-2xl"><Dumbbell size={20} /></IconButton>}
         </div>

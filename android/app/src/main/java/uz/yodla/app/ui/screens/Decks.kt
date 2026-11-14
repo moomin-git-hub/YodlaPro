@@ -111,7 +111,8 @@ fun treeStats(d: AppData, id: String): DeckStats {
     val ids = Graph.repo.tree(id, d.decks).toSet()
     return Stats.deck(d.cards.filter { it.deckId in ids })
 }
-fun toStudy(d: AppData, st: DeckStats) = st.due + minOf(st.new, d.settings.newPerDay)
+/** Cards that a study session would really show today (same logic as the study queue). */
+fun toStudy(target: String) = Graph.repo.todayCount(target)
 
 /** Noji-style deck node: ± to expand subdecks, "N cards to study today", ⋮ menu. */
 @Composable
@@ -124,7 +125,7 @@ fun DeckTreeNode(d: AppData, deck: Deck, nav: NavHostController, sort: String = 
     val ctx = LocalContext.current
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
-    val n = toStudy(d, st)
+    val n = remember(d, deck.id) { toStudy(deck.id) }
     val body: @Composable ColumnScope.() -> Unit = {
         Row(Modifier.fillMaxWidth().clickable { nav.go("deck/${deck.id}") }.padding(start = if (kids.isEmpty() && depth == 0) 12.dp else 4.dp, top = 10.dp, bottom = 10.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             if (kids.isNotEmpty()) IconButton({ open = !open }, Modifier.size(36.dp)) { Icon(if (open) Icons.Rounded.Remove else Icons.Rounded.Add, null) }
@@ -171,7 +172,7 @@ fun DeckTreeNode(d: AppData, deck: Deck, nav: NavHostController, sort: String = 
 @Composable
 fun FolderRow(d: AppData, f: Folder, onOpen: () -> Unit, onEdit: () -> Unit, onAdd: () -> Unit) {
     val decks = d.decks.filter { it.folderId == f.id && it.parentId == null && !it.archived }
-    val n = decks.sumOf { toStudy(d, treeStats(d, it.id)) }
+    val n = remember(d, f.id) { toStudy("folder:${f.id}") }
     YCard(Modifier.fillMaxWidth(), onClick = onOpen, padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(deckBrush(f.color)), contentAlignment = Alignment.Center) {
@@ -200,7 +201,7 @@ fun FolderScreen(nav: NavHostController, id: String) {
     val scope = rememberCoroutineScope()
     if (f == null) { Column(Modifier.padding(16.dp)) { PageHeader("", onBack = { nav.popBackStack() }); EmptyState(Icons.Rounded.FolderOff, stringResource(R.string.notFound)) }; return }
     val decks = remember(d, id) { sortDecks(d, d.decks.filter { it.folderId == id && it.parentId == null && !it.archived }, "due") }
-    val n = decks.sumOf { toStudy(d, treeStats(d, it.id)) }
+    val n = remember(d, id) { toStudy("folder:$id") }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
