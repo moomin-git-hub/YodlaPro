@@ -1,0 +1,45 @@
+# Render Blueprint: one web service = API + built frontend.
+services:
+  - type: web
+    name: yodla
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci && npm run build && npm ci --prefix server --omit=dev
+    startCommand: node server/src/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_API_URL          # build-time: app talks to the same origin
+        value: /
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL          # Neon → Connect → pooled connection string
+        sync: false
+      - key: AWS_ENDPOINT_URL_S3   # Neon → Object storage → branch endpoint
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: us-east-2
+      - key: STORAGE_BUCKET
+        value: yodla
+      - key: AI_PROVIDER           # anthropic | openai | gemini | openrouter (optional)
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: APP_URL               # e.g. https://yodla.onrender.com (password-reset links)
+        sync: false
+      - key: SMTP_HOST             # optional, for password-reset emails
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
