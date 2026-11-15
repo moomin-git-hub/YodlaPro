@@ -12,6 +12,7 @@
     <string name="addToLibrary">Добавить к себе</string>
     <string name="added">В вашей библиотеке</string>
     <string name="again">Снова</string>
+    <string name="aiBusy">ИИ сейчас перегружен. Попробуйте через минуту.</string>
     <string name="aiError">Ошибка: %1$s</string>
     <string name="aiFile">Конспект / PDF</string>
     <string name="aiGenerate">AI-генератор</string>

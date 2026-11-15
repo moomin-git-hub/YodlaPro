@@ -111,7 +111,7 @@ fun errMessage(ctx: android.content.Context, e: Throwable): String {
     val id = when (code) {
         "offline" -> R.string.offlineErr; "noServer" -> R.string.noServer; "invalidEmail" -> R.string.invalidEmail; "weakPassword" -> R.string.weakPassword
         "nameRequired" -> R.string.nameRequired; "emailTaken" -> R.string.emailTaken; "wrongCredentials" -> R.string.wrongCredentials
-        "wrongCode" -> R.string.wrongCode; "notSignedIn" -> R.string.notSignedIn; else -> 0
+        "wrongCode" -> R.string.wrongCode; "notSignedIn" -> R.string.notSignedIn; "aiBusy" -> R.string.aiBusy; else -> 0
     }
     return if (id != 0) ctx.getString(id) else code
 }

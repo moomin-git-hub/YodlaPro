@@ -12,6 +12,7 @@
     <string name="addToLibrary">Desklarimga qo\'shish</string>
     <string name="added">Kutubxonangizda</string>
     <string name="again">Yana</string>
+    <string name="aiBusy">AI hozir juda band. Bir daqiqadan keyin qayta urinib ko‘ring.</string>
     <string name="aiError">Xatolik: %1$s</string>
     <string name="aiFile">Konspekt / PDF</string>
     <string name="aiGenerate">AI generator</string>

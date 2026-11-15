@@ -13,6 +13,7 @@
     <string name="addToLibrary">Add to my decks</string>
     <string name="added">In your library</string>
     <string name="again">Again</string>
+    <string name="aiBusy">AI is very busy right now. Please try again in a minute.</string>
     <string name="aiError">Generation failed: %1$s</string>
     <string name="aiFile">Notes / PDF</string>
     <string name="aiGenerate">AI generator</string>
