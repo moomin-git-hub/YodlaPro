@@ -1,6 +1,10 @@
 package uz.yodla.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import kotlinx.coroutines.launch
+import uz.yodla.app.Graph
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -60,6 +64,7 @@ fun StatsScreen(nav: NavHostController) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { PageHeader(stringResource(R.string.stats), onBack = { nav.popBackStack() }) }
         if (d.reviews.isEmpty()) { item { EmptyState(Icons.Rounded.BarChart, stringResource(R.string.stats), stringResource(R.string.noStatsYet)) }; return@LazyColumn }
+        if (Graph.repo.cloud) item { ReportsCard() }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatTile(Icons.Rounded.MenuBook, Sky, stringResource(R.string.totalStudied), "${s.studied}", Modifier.weight(1f))
@@ -180,6 +185,51 @@ fun SearchScreen(nav: NavHostController) {
             else -> {
                 if (res.first.isNotEmpty()) { item { SectionTitle(stringResource(R.string.decks)) }; items(res.first, key = { "d" + it.id }) { DeckRow(it, Stats.deck(d.cardsOf(it.id))) { nav.go("deck/${it.id}") } } }
                 if (res.second.isNotEmpty()) { item { SectionTitle("${res.second.size} ${stringResource(R.string.cards)}") }; items(res.second, key = { it.id }) { c -> CardRow(c, null, { nav.go("card/${c.id}") }, deckLabel = d.deck(c.deckId)?.let { "${it.cover} ${it.title}" }) } }
+            }
+        }
+    }
+}
+
+/** Reports from the server: PDF overview, Excel with every card, Word hard-words notebook. */
+@Composable
+private fun ReportsCard() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf<String?>(null) }
+    var pending by remember { mutableStateOf<ByteArray?>(null) }
+    var mime by remember { mutableStateOf("application/pdf") }
+    val save = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("*/*")) { uri ->
+        val bytes = pending ?: return@rememberLauncherForActivityResult
+        if (uri != null) {
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
+        }
+        pending = null
+    }
+    YCard(Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.reports), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(Triple("pdf", "PDF", Rose), Triple("xlsx", "Excel", Emerald), Triple("docx", "Word", Sky)).forEach { (fmt, label, col) ->
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(col.copy(alpha = 0.10f))
+                    .clickable(enabled = busy == null) {
+                        busy = fmt
+                        scope.launch {
+                            runCatching { Graph.remote.report(fmt) }
+                                .onSuccess { (bytes, name) ->
+                                    pending = bytes
+                                    mime = mapOf("pdf" to "application/pdf", "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document")[fmt]!!
+                                    save.launch(name)
+                                }
+                                .onFailure { android.widget.Toast.makeText(ctx, errMessage(ctx, it), android.widget.Toast.LENGTH_LONG).show() }
+                            busy = null
+                        }
+                    }.padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (busy == fmt) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = col)
+                    else Icon(Icons.Rounded.Description, null, tint = col)
+                    Spacer(Modifier.height(6.dp))
+                    Text(label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                }
             }
         }
     }

@@ -10,6 +10,7 @@ import { RecoveryCodeScreen } from './Auth';
 import type { Key } from '../lib/i18n';
 import type { Theme } from '../lib/types';
 import { Brain, FlipHorizontal2 } from 'lucide-react';
+import { TelegramCard } from '../components/TelegramCard';
 import { ALGORITHMS } from '../lib/srs';
 
 export function Profile() {
@@ -59,6 +60,7 @@ export function Profile() {
         </div>
       )}
       {user.guest && <Button block icon={<UserPlus size={18} />} onClick={() => setUpOpen(true)}>{t('createAccount')}</Button>}
+      <TelegramCard />
 
       <Link to="/stats" className="card-surface flex items-center gap-3 rounded-3xl p-4 lg:hidden">
         <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-500/10 text-brand-500"><BarChart3 size={20} /></span>

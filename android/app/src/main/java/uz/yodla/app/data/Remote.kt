@@ -72,6 +72,17 @@ class Remote(private val ctx: Context, private val repo: Repo) {
     }
 
     // ---------------- AI ----------------
+    // ---- Telegram bot (@yodlaPro_bot) & reports ----
+    data class TgStatus(val enabled: Boolean, val bot: String, val linked: Boolean, val name: String)
+    suspend fun telegramStatus(): TgStatus? = if (!repo.cloud) null else runCatching {
+        val o = repo.api.request("GET", "/telegram/status").jsonObject
+        TgStatus(o["enabled"]?.jsonPrimitive?.booleanOrNull == true, o["bot"]?.jsonPrimitive?.contentOrNull.orEmpty(), o["linked"]?.jsonPrimitive?.booleanOrNull == true, o["name"]?.jsonPrimitive?.contentOrNull.orEmpty())
+    }.getOrNull()
+    suspend fun telegramLink(): String = repo.api.request("POST", "/telegram/link").jsonObject["url"]!!.jsonPrimitive.content
+    suspend fun telegramUnlink() { repo.api.request("DELETE", "/telegram/link") }
+    /** pdf (overview) · xlsx (all cards) · docx (hard-words notebook) */
+    suspend fun report(fmt: String, period: String = "week") = repo.api.download("/reports/$fmt?period=$period")
+
     suspend fun aiStatus(): Boolean = repo.cloud && runCatching { repo.api.request("GET", "/ai/status").jsonObject["ok"]?.jsonPrimitive?.booleanOrNull == true }.getOrDefault(false)
 
     suspend fun generate(topic: String?, text: String?, count: Int, language: String, format: String, detail: String, instructions: String): List<DraftCard> {

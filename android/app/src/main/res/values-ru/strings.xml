@@ -340,6 +340,7 @@
     <string name="reminders">Ежедневное напоминание</string>
     <string name="removeImage">Убрать</string>
     <string name="renameDeck">Переименовать</string>
+    <string name="reports">Отчёты</string>
     <string name="required">Обязательно</string>
     <string name="resetDeckConfirm">Сбросить прогресс %1$s карточек? Они снова станут новыми.</string>
     <string name="resetPassword">Сброс пароля</string>
@@ -409,6 +410,10 @@
     <string name="tapToFlip">Нажмите, чтобы перевернуть</string>
     <string name="tapToShow">Показать ответ</string>
     <string name="textTooShort">Введите минимум 20 символов</string>
+    <string name="tgConnect">Подключить</string>
+    <string name="tgDesc">Учёба, напоминания и отчёты в Telegram</string>
+    <string name="tgLinked">Подключено · %1$s</string>
+    <string name="tgUnlink">Отключить</string>
     <string name="theme">Тема</string>
     <string name="time">Время</string>
     <string name="title">Название</string>

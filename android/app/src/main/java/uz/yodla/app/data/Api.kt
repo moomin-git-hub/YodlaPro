@@ -54,6 +54,21 @@ class Api(private val session: suspend () -> Session) {
             }
         }
 
+    /** Binary download (reports): bytes + the file name the server suggests. */
+    suspend fun download(path: String): Pair<ByteArray, String> = withContext(Dispatchers.IO) {
+        val s = session()
+        if (s.serverUrl.isBlank()) throw ApiException("noServer", 0)
+        val b = Request.Builder().url(normalizeBase(s.serverUrl) + "/api" + path).get()
+        if (s.token != null) b.header("Authorization", "Bearer ${s.token}")
+        try {
+            http.newCall(b.build()).execute().use { res ->
+                if (!res.isSuccessful) throw ApiException("HTTP ${res.code}", res.code)
+                val name = Regex("filename=\"([^\"]+)\"").find(res.header("Content-Disposition").orEmpty())?.groupValues?.get(1) ?: "yodla-report"
+                res.body!!.bytes() to name
+            }
+        } catch (e: IOException) { throw ApiException("offline", 0) }
+    }
+
     companion object {
         fun normalizeBase(u: String): String {
             var s = u.trim().trimEnd('/')

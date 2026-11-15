@@ -10,6 +10,8 @@ const SECRET = process.env.JWT_SECRET;
 if (!SECRET || SECRET.length < 32) throw new Error('JWT_SECRET must be set (at least 32 random characters)');
 const isEmail = (s) => typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim()) && s.length <= 254;
 const strong = (p) => typeof p === 'string' && p.length >= 8 && p.length <= 200 && /[A-Za-z]/.test(p) && /\d/.test(p);
+export const signToken = (u) => sign(u);
+export const publicUser = (u) => pub(u);
 const pub = (u) => ({ id: u.id, email: u.email, name: u.name, createdAt: new Date(u.created_at).getTime() });
 const sign = (u) => jwt.sign({ sub: u.id }, SECRET, { expiresIn: '60d' });
 

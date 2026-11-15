@@ -340,6 +340,7 @@
     <string name="reminders">Kunlik eslatma</string>
     <string name="removeImage">Olib tashlash</string>
     <string name="renameDeck">Nomini o\'zgartirish</string>
+    <string name="reports">Hisobotlar</string>
     <string name="required">Majburiy</string>
     <string name="resetDeckConfirm">%1$s ta karta natijasi tiklansinmi? Ular yana yangi bo\'ladi.</string>
     <string name="resetPassword">Parolni tiklash</string>
@@ -409,6 +410,10 @@
     <string name="tapToFlip">Aylantirish uchun bosing</string>
     <string name="tapToShow">Javobni ko‘rish</string>
     <string name="textTooShort">Kamida 20 ta belgi kiriting</string>
+    <string name="tgConnect">Ulash</string>
+    <string name="tgDesc">Telegram’da o‘qish, eslatmalar va hisobotlar</string>
+    <string name="tgLinked">Ulangan · %1$s</string>
+    <string name="tgUnlink">Uzish</string>
     <string name="theme">Mavzu</string>
     <string name="time">Vaqt</string>
     <string name="title">Nomi</string>

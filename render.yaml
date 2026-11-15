@@ -31,6 +31,10 @@ services:
         sync: false
       - key: AI_API_KEY
         sync: false
+      - key: TELEGRAM_BOT_TOKEN    # @BotFather token for @yodlaPro_bot (optional: enables the Telegram bot)
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        value: yodlaPro_bot
       - key: APP_URL               # e.g. https://yodla.onrender.com (password-reset links)
         sync: false
       - key: SMTP_HOST             # optional, for password-reset emails

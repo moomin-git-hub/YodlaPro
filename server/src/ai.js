@@ -65,19 +65,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * Calls the AI with retries (1s, 2s, 4s backoff) and, if the model stays busy, falls back to a lighter model.
  * When everything is busy the error has code "aiBusy" so apps can show a friendly, translated message.
  */
-async function callAI(prompt, sys = SYS) {
+async function callAI(prompt, sys = SYS, media = null) {
   const models = [MODEL, ...(process.env.AI_FALLBACK_MODELS?.split(',').map((m) => m.trim()).filter(Boolean) ?? FALLBACKS[PROVIDER] ?? [])]
     .filter((m, i, a) => m && a.indexOf(m) === i);
   let last;
   for (const model of models) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        return await callModel(prompt, sys, model);
+        return await callModel(prompt, sys, model, media);
       } catch (e) {
         last = e;
         if (PROVIDER === 'gemini' && model === MODEL && RETIRED.test(e.message)) {
           const next = await geminiReplacement(e.message);
-          if (next !== MODEL) { console.warn(`AI model ${MODEL} unavailable, switching to ${next}`); MODEL = next; return callAI(prompt, sys); }
+          if (next !== MODEL) { console.warn(`AI model ${MODEL} unavailable, switching to ${next}`); MODEL = next; return callAI(prompt, sys, media); }
         }
         if (!isTransient(e)) break; // a real error (bad key, bad request…): no point retrying this model
         console.warn(`AI ${model} busy (${e.status ?? ''} ${e.message?.slice(0, 80)}), retry ${attempt + 1}`);
@@ -92,12 +92,14 @@ async function callAI(prompt, sys = SYS) {
 
 const fail = (msg, status) => Object.assign(new Error(msg), { status });
 
-async function callModel(prompt, sys, MODEL) {
+/** media: optional { mime, data (base64) } — a photo (all providers) or audio (Gemini) to read flashcards from. */
+async function callModel(prompt, sys, MODEL, media = null) {
+  if (media && !media.mime.startsWith('image/') && PROVIDER !== 'gemini') throw fail('mediaUnsupported', 400);
   if (PROVIDER === 'anthropic') {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 8000, system: sys, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 8000, system: sys, messages: [{ role: 'user', content: media ? [{ type: 'image', source: { type: 'base64', media_type: media.mime, data: media.data } }, { type: 'text', text: prompt }] : prompt }] }),
     });
     const j = await r.json();
     if (!r.ok) throw fail(j?.error?.message ?? `Anthropic ${r.status}`, r.status);
@@ -108,7 +110,7 @@ async function callModel(prompt, sys, MODEL) {
     const r = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: MODEL, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: sys }, { role: 'user', content: media ? [{ type: 'image_url', image_url: { url: `data:${media.mime};base64,${media.data}` } }, { type: 'text', text: prompt }] : prompt }] }),
     });
     const j = await r.json();
     if (!r.ok) throw fail(j?.error?.message ?? `${PROVIDER} ${r.status}`, r.status);
@@ -118,7 +120,7 @@ async function callModel(prompt, sys, MODEL) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } }),
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: [{ role: 'user', parts: [...(media ? [{ inline_data: { mime_type: media.mime, data: media.data } }] : []), { text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw fail(j?.error?.message ?? `Gemini ${r.status}`, r.status);
@@ -191,3 +193,4 @@ aiRouter.post('/generate', rateLimit({ windowMs: 60 * 60_000, max: 40 }), async 
   }
 });
 export { callAI as _callAI }; // for tests
+export { callAI, buildPrompt, parseCards };

@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +34,7 @@ import androidx.navigation.NavHostController
 import kotlinx.coroutines.launch
 import uz.yodla.app.BuildConfig
 import uz.yodla.app.Graph
+import uz.yodla.app.data.Remote
 import uz.yodla.app.R
 import uz.yodla.app.data.*
 import uz.yodla.app.go
@@ -94,6 +96,7 @@ fun ProfileScreen(nav: NavHostController) {
                 Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.syncNow))
             }
         }
+        TelegramCard()
         NavRow(Icons.Rounded.BarChart, Brand, stringResource(R.string.stats)) { nav.go("stats") }
 
         Group(stringResource(R.string.appearance)) {
@@ -315,5 +318,39 @@ fun ServerScreen(nav: NavHostController) {
         Text(stringResource(R.string.serverIntro), style = Muted)
         ServerRow(d.session.serverUrl, open) { open = it }
         if (d.session.user?.mode == "cloud") Notice(stringResource(R.string.serverChangeWarning), Amber)
+    }
+}
+
+/** Connect the account to @yodlaPro_bot: study, reminders and reports in Telegram. */
+@Composable
+private fun TelegramCard() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var st by remember { mutableStateOf<Remote.TgStatus?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(owner) { // refresh when coming back from Telegram after linking
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) scope.launch { st = Graph.remote.telegramStatus() } }
+        owner.lifecycle.addObserver(obs); onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    val s = st ?: return
+    if (!s.enabled) return
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Sky.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.Send, null, tint = Sky) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Telegram · @${s.bot}", fontWeight = FontWeight.Bold)
+            Text(if (s.linked) stringResource(R.string.tgLinked, s.name.ifBlank { "✓" }) else stringResource(R.string.tgDesc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+        }
+        if (s.linked) FilledTonalButton({ scope.launch { runCatching { Graph.remote.telegramUnlink() }; st = Graph.remote.telegramStatus() } }) { Text(stringResource(R.string.tgUnlink)) }
+        else Button({
+            busy = true
+            scope.launch {
+                runCatching { Graph.remote.telegramLink() }
+                    .onSuccess { url -> ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                    .onFailure { android.widget.Toast.makeText(ctx, errMessage(ctx, it), android.widget.Toast.LENGTH_LONG).show() }
+                busy = false
+            }
+        }, enabled = !busy) { Text(stringResource(R.string.tgConnect)) }
     }
 }
