@@ -73,12 +73,14 @@ class StudyFlowTest {
         assertEquals(Status.REVIEW, u.status); assertEquals(1.0, u.interval, 0.0)
         settle { d -> d.cards.first { it.id == c.id }.status == Status.REVIEW }
         assertTrue(repo.buildQueue(deck.id, false).isEmpty)
-        // a day later the word is forgotten: Again → back in 12h (Noji), not held in this session
+        // a day later the word is forgotten: Again → relearned in the same session, 10m later
         val later = u.due + 60_000
         val lapse = Srs.schedule(u, 1, Algo.FSRS, cfg, later)
-        assertEquals(Status.RELEARNING, lapse.status); assertEquals(later + 720 * 60_000L, lapse.due)
+        assertEquals(Status.RELEARNING, lapse.status); assertEquals(later + 10 * 60_000L, lapse.due)
         val lapsed = u.copy(status = lapse.status, due = lapse.due)
-        assertTrue(StudyQueue().afterAnswer(lapsed, Srs.endOfToday(later), later).learn.isEmpty())
+        assertEquals(1, StudyQueue().afterAnswer(lapsed, Long.MAX_VALUE, later).learn.size)
+        // a step longer than an hour is not waited for inside a session
+        assertTrue(StudyQueue().afterAnswer(lapsed.copy(due = later + 3 * 3600_000L), Long.MAX_VALUE, later).learn.isEmpty())
         // Again on a learning card (1m) stays in the session
         assertEquals(1, StudyQueue().afterAnswer(lapsed.copy(due = later + 60_000), Long.MAX_VALUE, later).learn.size)
     }

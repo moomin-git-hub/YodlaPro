@@ -48,7 +48,7 @@ export function Stats() {
       </section>
       <section className="grid grid-cols-3 gap-3">
         <div className="card-surface flex flex-col items-center rounded-3xl p-4"><Ring value={s.acc / 100} size={76} stroke={8}><span className="text-lg font-extrabold">{s.acc}%</span></Ring><span className="mt-2 text-xs font-semibold opacity-55">{t('accuracy')}</span></div>
-        <div className="card-surface flex flex-col items-center justify-center rounded-3xl p-4 text-center"><Flame className="text-orange-500" size={28} /><span className="mt-1 text-2xl font-extrabold">{s.st.current}</span><span className="text-xs font-semibold opacity-55">{t('streak')} · <Trophy size={11} className="inline" /> {s.st.best}</span></div>
+        <Link to="/activity" className="card-surface flex flex-col items-center justify-center rounded-3xl p-4 text-center"><Flame className="text-orange-500" size={28} /><span className="mt-1 text-2xl font-extrabold">{s.st.current}</span><span className="text-xs font-semibold opacity-55">{t('streak')} · <Trophy size={11} className="inline" /> {s.st.best}</span></Link>
         <div className="card-surface flex flex-col items-center justify-center rounded-3xl p-4 text-center"><Clock className="text-violet-500" size={28} /><span className="mt-1 text-lg font-extrabold leading-tight">{fmtTime(s.time, t)}</span><span className="text-xs font-semibold opacity-55">{t('totalTime')}</span></div>
       </section>
 

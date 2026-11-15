@@ -114,7 +114,7 @@ export function Profile() {
           <p className="mb-1 flex items-center gap-2 text-sm font-semibold"><Keyboard size={18} className="opacity-60" />{t('shortcuts')}</p>
           <p className="text-xs leading-relaxed opacity-55">{t('shortcutsList')}</p>
         </div>
-        <div className="flex items-center gap-2 py-3 text-sm"><Info size={18} className="opacity-60" /><span className="font-semibold">{t('about')}</span><span className="ml-auto opacity-50">Yodla · {t('version')} 1.0.0</span></div>
+        <div className="flex items-center gap-2 py-3 text-sm"><Info size={18} className="opacity-60" /><span className="font-semibold">{t('about')}</span><span className="ml-auto opacity-50">v{__APP_VERSION__} · {__BUILD_TIME__}</span></div>
         <ActionRow icon={<LogOut size={18} />} label={t('signOut')} danger onClick={async () => { if (await confirmDialog(`${t('signOut')}?`, { ok: t('signOut'), cancel: t('cancel') })) signOut(); }} />
       </Group>
 

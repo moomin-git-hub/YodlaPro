@@ -74,7 +74,7 @@ fun StatsScreen(nav: NavHostController) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 YCard(Modifier.weight(1f)) { Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { Ring(s.acc / 100f, 72.dp, 8.dp) { Text("${s.acc}%", fontWeight = FontWeight.ExtraBold) }; Text(stringResource(R.string.accuracy), style = Muted) } }
-                YCard(Modifier.weight(1f)) { Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                YCard(Modifier.weight(1f), onClick = { nav.go("activity") }) { Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Rounded.LocalFireDepartment, null, tint = Orange, modifier = Modifier.size(30.dp)); Text("${s.streak.first}", style = MaterialTheme.typography.headlineSmall)
                     Text("${stringResource(R.string.streak)} · 🏆 ${s.streak.second}", style = Muted)
                 } }

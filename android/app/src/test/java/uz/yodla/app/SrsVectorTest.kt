@@ -82,7 +82,7 @@ class SrsVectorTest {
         val s = Srs.schedule(c, 1, Algo.FSRS, SrsConfig(), 30 * DAY_MS)
         assertEquals(Status.RELEARNING, s.status)
         assertTrue(s.stability < 30.0 / 2); assertTrue(s.difficulty > 5.0); assertEquals(1, s.lapses)
-        assertEquals(30 * DAY_MS + 720 * MIN_MS, s.due) // FSRS lapse: Again → 12h (Noji)
+        assertEquals(30 * DAY_MS + 10 * MIN_MS, s.due) // FSRS lapse: Again → relearn in 10m
     }
 
     @Test fun fastReviewNeverReschedules() {

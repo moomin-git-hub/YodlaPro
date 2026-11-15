@@ -36,6 +36,13 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         splash.setKeepOnScreenCondition { !Graph.repo.data.value.loaded }
         setContent { Root() }
+        // after an update, say so once — the user can see that the new version is installed
+        val vp = getSharedPreferences("yodla_version", MODE_PRIVATE)
+        val seen = vp.getString("seen", null)
+        if (seen != BuildConfig.VERSION_NAME) {
+            if (seen != null) android.widget.Toast.makeText(this, getString(R.string.updatedTo, BuildConfig.VERSION_NAME), android.widget.Toast.LENGTH_LONG).show()
+            vp.edit().putString("seen", BuildConfig.VERSION_NAME).apply()
+        }
     }
 
     override fun onResume() {
@@ -133,6 +140,7 @@ fun MainNav() {
             composable("ai?deck={deck}", listOf(navArgument("deck") { type = NavType.StringType; nullable = true })) { AiScreen(nav, it.arguments?.getString("deck")) }
             composable("import?deck={deck}", listOf(navArgument("deck") { type = NavType.StringType; nullable = true })) { ImportScreen(nav, it.arguments?.getString("deck")) }
             composable("stats") { StatsScreen(nav) }
+            composable("activity") { ActivityScreen(nav) }
             composable("search") { SearchScreen(nav) }
             composable("presets") { PresetsScreen(nav) }
             composable("server") { ServerScreen(nav) }

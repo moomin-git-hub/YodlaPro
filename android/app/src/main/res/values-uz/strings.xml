@@ -3,6 +3,8 @@
     <string name="about">Ilova haqida</string>
     <string name="account">Hisob</string>
     <string name="accuracy">Aniqlik</string>
+    <string name="activeDays">Faol kunlar</string>
+    <string name="activity">Faollik</string>
     <string name="addCard">Karta qo\'shish</string>
     <string name="addDeckHere">Desk qo\'shish</string>
     <string name="addImage">Rasm qo\'shish</string>
@@ -241,6 +243,7 @@
     <string name="learningSteps">O\'rganish qadamlari (daqiqa)</string>
     <string name="light">Yorug\'</string>
     <string name="listen">Tinglash</string>
+    <string name="longestStreak">Eng uzun seriya</string>
     <string name="makeCloze">Bo\'sh joy</string>
     <string name="manualCard">Karta qo\'shish</string>
     <string name="manualCardSub">Qo\'lda karta yozing</string>
@@ -424,6 +427,7 @@
     <string name="unfreeze">Muzdan chiqarish</string>
     <string name="unreverse">Teskarini olib tashlash</string>
     <string name="upcoming">Yaqin takrorlashlar</string>
+    <string name="updatedTo">Yodla yangilandi · v%1$s</string>
     <string name="useCustomByDefault">Yangi desklar uchun Shaxsiyni ishlatish</string>
     <string name="waitSub">%1$s ta karta hali o\'rganish bosqichida. Ular aynan vaqti kelganda qaytadi.</string>
     <string name="waitTitle">Keyingi karta tez orada qaytadi</string>

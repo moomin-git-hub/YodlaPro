@@ -48,7 +48,7 @@ export function Home() {
           <p className="text-sm font-semibold opacity-55">{greet}</p>
           <h1 className="text-[26px] font-extrabold tracking-tight">{user?.name || 'Learner'} 👋</h1>
         </div>
-        <Link to="/stats" className="card-surface flex items-center gap-1.5 rounded-2xl px-3.5 py-2 font-extrabold text-orange-500" aria-label={`${t('streak')}: ${s.st.current}`}>
+        <Link to="/activity" className="card-surface flex items-center gap-1.5 rounded-2xl px-3.5 py-2 font-extrabold text-orange-500" aria-label={`${t('streak')}: ${s.st.current}`}>
           <Flame size={20} className={s.st.current ? 'fill-orange-400' : 'opacity-40'} />{s.st.current}
         </Link>
       </header>

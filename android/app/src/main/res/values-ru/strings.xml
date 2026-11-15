@@ -3,6 +3,8 @@
     <string name="about">О приложении</string>
     <string name="account">Аккаунт</string>
     <string name="accuracy">Точность</string>
+    <string name="activeDays">Активных дней</string>
+    <string name="activity">Активность</string>
     <string name="addCard">Добавить карточку</string>
     <string name="addDeckHere">Добавить колоду</string>
     <string name="addImage">Добавить фото</string>
@@ -241,6 +243,7 @@
     <string name="learningSteps">Шаги изучения (минуты)</string>
     <string name="light">Светлая</string>
     <string name="listen">Прослушать</string>
+    <string name="longestStreak">Лучшая серия</string>
     <string name="makeCloze">Пропуск</string>
     <string name="manualCard">Новая карточка</string>
     <string name="manualCardSub">Написать вручную</string>
@@ -424,6 +427,7 @@
     <string name="unfreeze">Разморозить</string>
     <string name="unreverse">Убрать обратную</string>
     <string name="upcoming">Ближайшие повторения</string>
+    <string name="updatedTo">Yodla обновлена · v%1$s</string>
     <string name="useCustomByDefault">Использовать «Свой» для новых колод</string>
     <string name="waitSub">Карточек на этапе изучения: %1$s. Они вернутся ровно в своё время.</string>
     <string name="waitTitle">Следующая карточка скоро вернётся</string>

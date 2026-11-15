@@ -70,7 +70,7 @@ fun HomeScreen(nav: NavHostController) {
                     Text("${d.session.user?.name?.ifBlank { null } ?: stringResource(R.string.learner)} 👋", style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 IconButton({ nav.go("search") }) { Icon(Icons.Rounded.Search, stringResource(R.string.search)) }
-                YCard(onClick = { nav.go("stats") }, padding = 10.dp, shape = RoundedCornerShape(16.dp)) {
+                YCard(onClick = { nav.go("activity") }, padding = 10.dp, shape = RoundedCornerShape(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.LocalFireDepartment, null, tint = if (s.streak > 0) Orange else MaterialTheme.colorScheme.outline)
                         Text("${s.streak}", fontWeight = FontWeight.ExtraBold, color = Orange)

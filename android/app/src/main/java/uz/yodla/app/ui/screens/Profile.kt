@@ -156,7 +156,7 @@ fun ProfileScreen(nav: NavHostController) {
             }
             Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(12.dp))
-                Text(stringResource(R.string.about), Modifier.weight(1f), fontWeight = FontWeight.SemiBold); Text("Yodla ${BuildConfig.VERSION_NAME}", style = Muted)
+                Text(stringResource(R.string.about), Modifier.weight(1f), fontWeight = FontWeight.SemiBold); Text("v${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_TIME}", style = Muted)
             }
             NavRowPlain(Icons.Rounded.Logout, stringResource(R.string.signOut), Rose) {
                 ask(ctx.getString(if (user?.guest == true) R.string.signOutGuestConfirm else R.string.signOutConfirm), ctx.getString(R.string.signOut), true) { scope.launch { Graph.auth.signOut() } }

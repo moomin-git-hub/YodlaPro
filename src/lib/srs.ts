@@ -104,8 +104,8 @@ export function fuzz(days: number, seed: string, maxI: number) {
  * A brand-new word graduates conservatively to 1d (Good) / 4d (Easy); from then on FSRS stability decides.
  */
 export const FSRS_AGAIN_MIN = 1, FSRS_HARD_MIN = 15, FIRST_GOOD_DAYS = 1, FIRST_EASY_DAYS = 4;
-/** A forgotten review card (Again) comes back after 12 hours, like Noji — not in the same session. */
-export const FSRS_LAPSE_MIN = 12 * 60;
+/** A forgotten review card (Again) is relearned in the same session, 10 minutes later. */
+export const FSRS_LAPSE_MIN = 10;
 
 export interface Scheduled {
   status: Card['status'];

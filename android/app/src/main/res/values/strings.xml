@@ -4,6 +4,8 @@
     <string name="about">About</string>
     <string name="account">Account</string>
     <string name="accuracy">Accuracy</string>
+    <string name="activeDays">Active days</string>
+    <string name="activity">Activity</string>
     <string name="addCard">Add card</string>
     <string name="addDeckHere">Add deck</string>
     <string name="addImage">Add image</string>
@@ -242,6 +244,7 @@
     <string name="learningSteps">Learning steps (minutes)</string>
     <string name="light">Light</string>
     <string name="listen">Listen</string>
+    <string name="longestStreak">Longest streak</string>
     <string name="makeCloze">Make blank</string>
     <string name="manualCard">Add flashcard</string>
     <string name="manualCardSub">Write a card by hand</string>
@@ -425,6 +428,7 @@
     <string name="unfreeze">Unfreeze</string>
     <string name="unreverse">Unreverse</string>
     <string name="upcoming">Upcoming reviews</string>
+    <string name="updatedTo">Yodla updated · v%1$s</string>
     <string name="useCustomByDefault">Use Custom for new decks</string>
     <string name="waitSub">%1$s cards are still in learning steps. They return exactly when their time comes.</string>
     <string name="waitTitle">Next card is coming back soon</string>

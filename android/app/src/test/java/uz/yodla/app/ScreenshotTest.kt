@@ -126,6 +126,7 @@ class ScreenshotTest {
     @Test fun clozeEditor() = shot("07_cloze_editor") { CardEditScreen(rememberNavController(), "new", deckId, CardType.CLOZE) }
     @Test fun occlusionEditor() = shot("08_occlusion_editor") { CardEditScreen(rememberNavController(), "new", occDeck, CardType.OCCLUSION) }
     @Test fun stats() = shot("09_stats") { StatsScreen(rememberNavController()) }
+    @Test fun activity() = shot("09b_activity") { ActivityScreen(rememberNavController()) }
     @Test fun explore() = shot("10_explore") { ExploreScreen(rememberNavController()) }
     @Test fun create() = shot("11_create") { CreateScreen(rememberNavController()) }
     @Test fun ai() = shot("12_ai") { AiScreen(rememberNavController(), deckId) }

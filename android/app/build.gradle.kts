@@ -1,3 +1,6 @@
+import java.time.ZonedDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Properties
 
 plugins {
@@ -23,8 +26,11 @@ android {
         applicationId = "uz.yodla.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // Every build gets a higher version, so an update is always recognisable (Profile → About shows it).
+        val built = ZonedDateTime.now(ZoneId.of("Asia/Tashkent"))
+        versionCode = ((built.toEpochSecond() - 1767225600L) / 60).toInt() // minutes since 2026-01-01
+        versionName = "1.2." + built.format(DateTimeFormatter.ofPattern("MMdd.HHmm"))
+        buildConfigField("String", "BUILD_TIME", "\"" + built.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\"")
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"$serverUrl\"")
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en", "uz", "ru")
