@@ -43,8 +43,9 @@ const fsrs = {
     const hard = g === 2 ? W[15] : 1, easy = g === 4 ? W[16] : 1;
     return s * (1 + Math.exp(W[8]) * (11 - d) * Math.pow(s, -W[9]) * (Math.exp((1 - r) * W[10]) - 1) * hard * easy);
   },
+  /** Post-lapse stability, capped at S / e^(w17·w18) exactly like the official FSRS-5 (ts-fsrs 4.x). */
   forgetS(d, s, r) {
-    return Math.min(W[11] * Math.pow(d, -W[12]) * (Math.pow(s + 1, W[13]) - 1) * Math.exp((1 - r) * W[14]), s);
+    return Math.min(W[11] * Math.pow(d, -W[12]) * (Math.pow(s + 1, W[13]) - 1) * Math.exp((1 - r) * W[14]), s / Math.exp(W[17] * W[18]));
   },
   shortS(s, g) {
     const n = s * Math.exp(W[17] * (g - 3 + W[18]));

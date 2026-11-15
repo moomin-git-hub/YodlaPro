@@ -83,7 +83,8 @@ object Fsrs {
         val easy = if (g == 4) W[16] else 1.0
         return s * (1 + exp(W[8]) * (11 - d) * s.pow(-W[9]) * (exp((1 - r) * W[10]) - 1) * hard * easy)
     }
-    fun forgetS(d: Double, s: Double, r: Double) = min(W[11] * d.pow(-W[12]) * ((s + 1).pow(W[13]) - 1) * exp((1 - r) * W[14]), s)
+    /** Post-lapse stability, capped at S / e^(w17·w18) exactly like the official FSRS-5 (ts-fsrs 4.x). */
+    fun forgetS(d: Double, s: Double, r: Double) = min(W[11] * d.pow(-W[12]) * ((s + 1).pow(W[13]) - 1) * exp((1 - r) * W[14]), s / exp(W[17] * W[18]))
     fun shortS(s: Double, g: Int): Double {
         val n = s * exp(W[17] * (g - 3 + W[18]))
         return if (g >= 3) max(n, s) else n
