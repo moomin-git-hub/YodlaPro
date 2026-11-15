@@ -113,8 +113,14 @@ fun ProfileScreen(nav: NavHostController) {
             SettingRow(Icons.Rounded.Flag, stringResource(R.string.dailyGoal)) { Stepper(s.dailyGoal, 5, 500, 5) { v -> repo.updateSettings { it.copy(dailyGoal = v) } } }
             SettingRow(Icons.Rounded.FiberNew, stringResource(R.string.newWordsPerDay)) { Stepper(s.newPerDay, 0, 500, 5) { v -> repo.updateSettings { it.copy(newPerDay = v) } } }
             var algoOpen by remember { mutableStateOf(false) }
-            SettingRow(Icons.Rounded.Science, stringResource(R.string.learningAlgorithm)) {
-                TextButton({ algoOpen = true }) { Text(stringResource(algoLabel(s.defaultAlgorithm)), maxLines = 1); Icon(Icons.Rounded.ExpandMore, null) }
+            // two lines: the algorithm name is long, so it goes under the label instead of squeezing it
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { algoOpen = true }.heightIn(min = 56.dp).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Science, null, tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.learningAlgorithm), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(algoLabel(s.defaultAlgorithm)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                }
+                Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (algoOpen) AlgorithmSheet(s.defaultAlgorithm, onPick = { a ->
                 algoOpen = false
@@ -205,7 +211,7 @@ fun SettingRow(icon: ImageVector, label: String, trailing: @Composable () -> Uni
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(12.dp))
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-        trailing()
+        Box(Modifier.widthIn(max = 210.dp)) { trailing() } // never squeeze the label into a one-letter column
     }
 }
 
