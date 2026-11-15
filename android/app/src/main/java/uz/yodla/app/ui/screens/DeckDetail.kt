@@ -124,9 +124,11 @@ fun DeckScreen(nav: NavHostController, id: String) {
                         Column(Modifier.weight(1f)) {
                             Text(deck.title, style = MaterialTheme.typography.headlineSmall)
                             Text("${stringResource(catLabel(deck.category))}${if (deck.archived) " · 🗄" else ""}", style = Muted)
-                            Row(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable { algoSheet = true }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(stringResource(R.string.learningAlgorithm) + ": ", style = Muted)
-                                Text(stringResource(algoLabel(deck.algorithm)) + if (deck.algorithm != Algo.FAST) " · " + stringResource(presetLabel(deck.preset)) else "", color = Sky, style = MaterialTheme.typography.labelLarge)
+                            // compact chip: tapping it opens the algorithm choice (the long name never squeezes the header)
+                            Row(Modifier.padding(top = 8.dp).clip(CircleShape).background(Brand.copy(alpha = 0.12f)).clickable { algoSheet = true }.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Psychology, null, tint = Brand, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text(stringResource(algoLabel(deck.algorithm)), color = Brand, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             }
                         }
                     }
