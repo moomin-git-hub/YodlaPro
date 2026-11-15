@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart3, ChevronRight, Moon, Globe, Target, Bell, Download, Upload, Trash2, KeyRound, LogOut, Keyboard, Info, Cloud, HardDrive, RefreshCw, Pencil, UserPlus, Volume2, Shuffle, CalendarPlus } from 'lucide-react';
-import { useData, getData, saveDeck, updateSettings, exportBackup, importBackup, wipeData, syncState, syncNow } from '../lib/store';
+import { useData, updateSettings, exportBackup, importBackup, wipeData, syncState, syncNow } from '../lib/store';
 import { useT, LANGS } from '../lib/i18n';
 import { getUser, signOut, changePassword, updateName, upgradeGuest, validatePassword } from '../lib/auth';
 import { download, readFileText, isEmail } from '../lib/util';
@@ -9,9 +9,8 @@ import { Button, Field, PageHeader, Segmented, Sheet, Toggle, confirmDialog, toa
 import { RecoveryCodeScreen } from './Auth';
 import type { Key } from '../lib/i18n';
 import type { Theme } from '../lib/types';
-import { Brain, FlipHorizontal2 } from 'lucide-react';
-import { TelegramCard } from '../components/TelegramCard';
-import { ALGORITHMS } from '../lib/srs';
+import { Brain, SlidersHorizontal } from 'lucide-react';
+import { ALGORITHMS, PRESET_IDS, DEFAULT_CONFIG } from '../lib/srs';
 
 export function Profile() {
   const d = useData();
@@ -60,7 +59,6 @@ export function Profile() {
         </div>
       )}
       {user.guest && <Button block icon={<UserPlus size={18} />} onClick={() => setUpOpen(true)}>{t('createAccount')}</Button>}
-      <TelegramCard />
 
       <Link to="/stats" className="card-surface flex items-center gap-3 rounded-3xl p-4 lg:hidden">
         <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-500/10 text-brand-500"><BarChart3 size={20} /></span>
@@ -79,15 +77,20 @@ export function Profile() {
       </Group>
 
       <Group title={t('learningGoals')}>
-        <Row icon={<Target size={18} />} label={t('dailyGoal')}><Stepper value={s.dailyGoal} min={5} max={500} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} /></Row>
-        <Row icon={<Target size={18} />} label={t('newWordsPerDay')}><Stepper value={s.newPerDay} min={0} max={500} step={5} onChange={(v) => updateSettings({ newPerDay: v })} /></Row>
+        <Row icon={<Target size={18} />} label={t('cardsPerDay')}><Stepper value={s.dailyGoal} min={5} max={500} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} /></Row>
+        <Row icon={<Target size={18} />} label={t('newPerDay')}><Stepper value={s.newPerDay} min={0} max={200} step={5} onChange={(v) => updateSettings({ newPerDay: v, customPreset: { ...DEFAULT_CONFIG, ...s.customPreset, newPerDay: v } })} /></Row>
         <Row icon={<Brain size={18} />} label={t('learningAlgorithm')}>
-          <select className="input h-10 w-auto py-0 text-sm" value={s.defaultAlgorithm ?? 'fsrs'} onChange={(e) => { const a = e.target.value as 'fsrs'; updateSettings({ defaultAlgorithm: a }); getData().decks.forEach((dk) => dk.algorithm !== a && saveDeck({ ...dk, algorithm: a })); }}>
+          <select className="input h-10 w-auto py-0 text-sm" value={s.defaultAlgorithm ?? 'fsrs'} onChange={(e) => updateSettings({ defaultAlgorithm: e.target.value as 'fsrs' })}>
             {ALGORITHMS.map((a) => <option key={a} value={a}>{t(a === 'fsrs' ? 'algoFsrs' : a === 'fast' ? 'algoFast' : 'algoSm2')}</option>)}
           </select>
         </Row>
+        <Row icon={<SlidersHorizontal size={18} />} label={t('preset')}>
+          <select className="input h-10 w-auto py-0 text-sm" value={s.defaultPreset ?? 'standard'} onChange={(e) => updateSettings({ defaultPreset: e.target.value })}>
+            {PRESET_IDS.map((p) => <option key={p} value={p}>{t(('preset' + p[0].toUpperCase() + p.slice(1)) as 'presetStandard')}</option>)}
+          </select>
+        </Row>
+        <Row icon={<Target size={18} />} label={`${t('presetCustom')} · ${t('desiredRetention')} %`}><Stepper value={Math.round((s.customPreset?.desiredRetention ?? 0.9) * 100)} min={75} max={97} step={1} onChange={(v) => updateSettings({ customPreset: { ...DEFAULT_CONFIG, ...s.customPreset, newPerDay: s.newPerDay, desiredRetention: v / 100 } })} /></Row>
         <Row icon={<Shuffle size={18} />} label={t('shuffle')}><Toggle label={t('shuffle')} checked={s.shuffle} onChange={(v) => updateSettings({ shuffle: v })} /></Row>
-        <Row icon={<FlipHorizontal2 size={18} />} label={t('flipCards')}><Toggle label={t('flipCards')} checked={!!s.flipCards} onChange={(v) => updateSettings({ flipCards: v })} /></Row>
         <Row icon={<Volume2 size={18} />} label={t('listen')}><Toggle label={t('listen')} checked={s.tts} onChange={(v) => updateSettings({ tts: v })} /></Row>
       </Group>
 
@@ -116,11 +119,11 @@ export function Profile() {
           <p className="mb-1 flex items-center gap-2 text-sm font-semibold"><Keyboard size={18} className="opacity-60" />{t('shortcuts')}</p>
           <p className="text-xs leading-relaxed opacity-55">{t('shortcutsList')}</p>
         </div>
-        <div className="flex items-center gap-2 py-3 text-sm"><Info size={18} className="opacity-60" /><span className="font-semibold">{t('about')}</span><span className="ml-auto opacity-50">v{__APP_VERSION__} · {__BUILD_TIME__}</span></div>
+        <div className="flex items-center gap-2 py-3 text-sm"><Info size={18} className="opacity-60" /><span className="font-semibold">{t('about')}</span><span className="ml-auto opacity-50">Yodla · {t('version')} 1.0.0</span></div>
         <ActionRow icon={<LogOut size={18} />} label={t('signOut')} danger onClick={async () => { if (await confirmDialog(`${t('signOut')}?`, { ok: t('signOut'), cancel: t('cancel') })) signOut(); }} />
       </Group>
 
-      <PasswordSheet open={pwOpen} onClose={() => setPwOpen(false)} needOld={user.mode === 'local'} />
+      <PasswordSheet open={pwOpen} onClose={() => setPwOpen(false)} needOld={!user.guest} />
       <NameSheet open={nameOpen} onClose={() => setNameOpen(false)} initial={user.name} />
       <UpgradeSheet open={upOpen} onClose={() => setUpOpen(false)} onCode={setCode} />
       {code && <RecoveryCodeScreen code={code} onDone={() => setCode(null)} />}

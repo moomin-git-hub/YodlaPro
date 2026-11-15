@@ -4,14 +4,13 @@ import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { q } from './db.js';
+import { deleteObject } from './storage.js';
 import { rateLimit } from './util.js';
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET || SECRET.length < 32) throw new Error('JWT_SECRET must be set (at least 32 random characters)');
 const isEmail = (s) => typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim()) && s.length <= 254;
 const strong = (p) => typeof p === 'string' && p.length >= 8 && p.length <= 200 && /[A-Za-z]/.test(p) && /\d/.test(p);
-export const signToken = (u) => sign(u);
-export const publicUser = (u) => pub(u);
 const pub = (u) => ({ id: u.id, email: u.email, name: u.name, createdAt: new Date(u.created_at).getTime() });
 const sign = (u) => jwt.sign({ sub: u.id }, SECRET, { expiresIn: '60d' });
 
@@ -79,22 +78,37 @@ authRouter.post('/password', requireAuth, limiter, async (req, res) => {
   res.json({ ok: true });
 });
 
+function safeResetBase(req, redirect) {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/[?#].*$/, '');
+  const fallback = `${req.protocol}://${req.get('host')}/`;
+  if (typeof redirect !== 'string' || !redirect) return fallback;
+  try {
+    const u = new URL(redirect);
+    if (u.host === req.get('host')) return `${u.origin}${u.pathname}`;
+  } catch { /* ignore invalid URL */ }
+  return fallback;
+}
+
 authRouter.post('/forgot', limiter, async (req, res) => {
   const { email, redirect } = req.body ?? {};
   if (!isEmail(email)) return res.status(400).json({ error: 'invalidEmail' });
   // Always answer the same way so the endpoint can't be used to discover accounts.
   res.json({ ok: true, emailEnabled: !!mailer });
-  const { rows } = await q('select id, email from users where email=$1', [email.trim().toLowerCase()]);
-  if (!rows[0] || !mailer) return;
-  const token = crypto.randomBytes(32).toString('base64url');
-  const hash = crypto.createHash('sha256').update(token).digest('hex');
-  await q("insert into password_resets (token_hash, user_id, expires_at) values ($1,$2, now() + interval '1 hour')", [hash, rows[0].id]);
-  const base = (process.env.APP_URL || (typeof redirect === 'string' ? redirect : '')).replace(/[?#].*$/, '');
-  const link = `${base}?reset=${token}`;
-  await mailer.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER, to: rows[0].email, subject: 'Yodla — reset your password',
-    text: `Open this link within 1 hour to set a new password:\n${link}\n\nIf you didn't ask for this, ignore this email.`,
-  }).catch((e) => console.error('mail error', e.message));
+  try {
+    const { rows } = await q('select id, email from users where email=$1', [email.trim().toLowerCase()]);
+    if (!rows[0] || !mailer) return;
+    const token = crypto.randomBytes(32).toString('base64url');
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    await q("insert into password_resets (token_hash, user_id, expires_at) values ($1,$2, now() + interval '1 hour')", [hash, rows[0].id]);
+    const base = safeResetBase(req, redirect);
+    const link = `${base}?reset=${token}`;
+    await mailer.sendMail({
+      from: process.env.MAIL_FROM || process.env.SMTP_USER, to: rows[0].email, subject: 'Yodla — reset your password',
+      text: `Open this link within 1 hour to set a new password:\n${link}\n\nIf you didn't ask for this, ignore this email.`,
+    });
+  } catch (e) {
+    console.error('forgot error', e.message);
+  }
 });
 
 authRouter.post('/reset', limiter, async (req, res) => {
@@ -108,6 +122,8 @@ authRouter.post('/reset', limiter, async (req, res) => {
 });
 
 authRouter.delete('/me', requireAuth, async (req, res) => {
+  const { rows } = await q('select key from files where user_id=$1', [req.userId]);
+  await Promise.allSettled(rows.map((r) => deleteObject(r.key)));
   await q('delete from users where id=$1', [req.userId]);
   res.json({ ok: true });
 });

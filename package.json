@@ -8,8 +8,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "dev:server": "npm run dev --prefix server",
-    "start": "node server/src/index.js",
-    "build:srs": "esbuild src/lib/srs.ts --format=esm --target=node20 --outfile=server/src/srs.gen.js"
+    "start": "node server/src/index.js"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

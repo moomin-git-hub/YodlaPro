@@ -4,12 +4,12 @@ import { Settings as Cog, Brain, MoreVertical } from 'lucide-react';
 import { AlgorithmSheet } from './DeckSettings';
 import { CardMenu } from '../components/CardMenu';
 import { algoFor } from '../lib/store';
+import { todayCount } from '../lib/queue';
 import { ArrowLeft, Play, Plus, Pencil, Download, Sparkles, Upload, Shuffle, Bookmark, AlertTriangle, CheckSquare, Trash2, RotateCcw, FolderInput, Globe, Dumbbell, Search, X, Inbox } from 'lucide-react';
 import { useData, updateCard, deleteCards, moveCards, resetProgress, updateSettings, deckTree } from '../lib/store';
 import { DeckTree } from '../components/DeckTree';
 import { plainText } from '../lib/rich';
 import { FolderTree, CornerLeftUp } from 'lucide-react';
-import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { deckStats } from '../lib/stats';
 import { isHard, isMastered, isDue, formatDuration } from '../lib/srs';
@@ -63,14 +63,21 @@ export function DeckDetail() {
 
   const exportAs = (fmt: 'csv' | 'json') => {
     const safe = deck.title.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 40) || 'deck';
-    if (fmt === 'csv') download(`${safe}.csv`, '﻿question,answer,example,explanation\n' + cards.map((c) => [plainText(c.front), plainText(c.back), c.example, c.explanation].map(csvEscape).join(',')).join('\n'), 'text/csv');
-    else download(`${safe}.json`, JSON.stringify({ app: 'yodla', deck: { title: deck.title, description: deck.description, category: deck.category, cover: deck.cover, color: deck.color }, cards: cards.map(({ front, back, example, explanation }) => ({ front, back, example, explanation })) }, null, 2));
+    const seen = new Set<string>();
+    const expCards = cards.filter((c) => {
+      if (c.cardType === 'occlusion' || c.cardType === 'reverse') return false;
+      const k = c.noteId ?? c.id;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+    if (fmt === 'csv') download(`${safe}.csv`, '﻿question,answer,example,explanation\n' + expCards.map((c) => [plainText(c.front), plainText(c.back), c.example, c.explanation].map(csvEscape).join(',')).join('\n'), 'text/csv');
+    else download(`${safe}.json`, JSON.stringify({ app: 'yodla', deck: { title: deck.title, description: deck.description, category: deck.category, cover: deck.cover, color: deck.color }, cards: expCards.map(({ front, back, example, explanation }) => ({ front, back, example, explanation })) }, null, 2));
     setExportOpen(false);
   };
   const toggle = (cid: string) => setSel((s) => { const n = new Set(s); n.has(cid) ? n.delete(cid) : n.add(cid); return n; });
   const ids = [...(sel ?? [])];
-  const toDo = useMemo(() => todayCount(d, id ?? ''), [d, id]);
-  const hasDue = toDo > 0 || allCards.some((c) => c.status === 'new' && !c.frozen);
+  const toStudy = todayCount(d, deck.id);
+  const hasDue = toStudy > 0 || algoFor(deck) === 'fast';
 
   return (
     <div>
@@ -100,7 +107,7 @@ export function DeckDetail() {
         </div>
         <div className="mt-4 flex items-center gap-3"><ProgressBar value={st.progress} className="flex-1" /><span className="text-sm font-extrabold">{st.progress}%</span></div>
         <div className="mt-5 flex gap-2">
-          <Button size="lg" block disabled={!allCards.length} icon={<Play size={18} className="fill-white" />} onClick={() => nav(hasDue ? `/study/${deck.id}` : `/study/${deck.id}?practice=1`)}>{hasDue ? `${t('study')}${toDo > 0 ? ` · ${toDo}` : ''}` : t('practice')}</Button>
+          <Button size="lg" block disabled={!allCards.length} icon={<Play size={18} className="fill-white" />} onClick={() => nav(hasDue ? `/study/${deck.id}` : `/study/${deck.id}?practice=1`)}>{hasDue ? (toStudy > 0 ? `${t('study')} · ${toStudy}` : t('study')) : t('practice')}</Button>
           <IconButton label={t('shuffle')} aria-pressed={d.settings.shuffle} onClick={() => { updateSettings({ shuffle: !d.settings.shuffle }); toast(`${t('shuffle')}: ${!d.settings.shuffle ? 'ON' : 'OFF'}`); }} className={cx('h-14 w-14 rounded-2xl', d.settings.shuffle ? 'bg-brand-500 text-white hover:bg-brand-600 dark:text-white' : 'card-surface')}><Shuffle size={20} /></IconButton>
           {hasDue && allCards.length > 0 && <IconButton label={t('practice')} onClick={() => nav(`/study/${deck.id}?practice=1`)} className="card-surface h-14 w-14 rounded-2xl"><Dumbbell size={20} /></IconButton>}
         </div>

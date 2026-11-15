@@ -54,55 +54,28 @@ Return ONLY valid JSON: {"cards":[{"front":"","back":"","example":"","explanatio
 }
 
 const SYS = 'You are an expert teacher who writes excellent flashcards. You always reply with strict JSON only.';
-/** Overload / rate limit / server hiccup: worth retrying (e.g. Gemini 503 "high demand"). */
-const TRANSIENT = /high demand|overloaded|unavailable|resource.?exhausted|rate.?limit|try again later|timeout|temporar/i;
-const isTransient = (e) => [429, 500, 502, 503, 504, 529].includes(e.status) || TRANSIENT.test(e.message ?? '');
-// lighter models to fall back to when the main one is overloaded
-const FALLBACKS = { gemini: ['gemini-flash-latest', 'gemini-flash-lite-latest'], anthropic: ['claude-haiku-4-5'], openai: ['gpt-4o-mini'], openrouter: [] };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Calls the AI with retries (1s, 2s, 4s backoff) and, if the model stays busy, falls back to a lighter model.
- * When everything is busy the error has code "aiBusy" so apps can show a friendly, translated message.
- */
-async function callAI(prompt, sys = SYS, media = null) {
-  const models = [MODEL, ...(process.env.AI_FALLBACK_MODELS?.split(',').map((m) => m.trim()).filter(Boolean) ?? FALLBACKS[PROVIDER] ?? [])]
-    .filter((m, i, a) => m && a.indexOf(m) === i);
-  let last;
-  for (const model of models) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        return await callModel(prompt, sys, model, media);
-      } catch (e) {
-        last = e;
-        if (PROVIDER === 'gemini' && model === MODEL && RETIRED.test(e.message)) {
-          const next = await geminiReplacement(e.message);
-          if (next !== MODEL) { console.warn(`AI model ${MODEL} unavailable, switching to ${next}`); MODEL = next; return callAI(prompt, sys, media); }
-        }
-        if (!isTransient(e)) break; // a real error (bad key, bad request…): no point retrying this model
-        console.warn(`AI ${model} busy (${e.status ?? ''} ${e.message?.slice(0, 80)}), retry ${attempt + 1}`);
-        if (attempt < 2) await sleep(1000 * 2 ** attempt);
-      }
-    }
-    if (last && !isTransient(last)) throw last;
+async function callAI(prompt, sys = SYS) {
+  try {
+    return await callModel(prompt, sys);
+  } catch (e) {
+    if (PROVIDER !== 'gemini' || !RETIRED.test(e.message)) throw e;
+    const next = await geminiReplacement(e.message);
+    if (next === MODEL) throw e;
+    console.warn(`AI model ${MODEL} unavailable, switching to ${next}`);
+    MODEL = next;
+    return callModel(prompt, sys);
   }
-  const busy = new Error('aiBusy'); busy.code = 'aiBusy'; busy.cause = last;
-  throw busy;
 }
 
-const fail = (msg, status) => Object.assign(new Error(msg), { status });
-
-/** media: optional { mime, data (base64) } — a photo (all providers) or audio (Gemini) to read flashcards from. */
-async function callModel(prompt, sys, MODEL, media = null) {
-  if (media && !media.mime.startsWith('image/') && PROVIDER !== 'gemini') throw fail('mediaUnsupported', 400);
+async function callModel(prompt, sys) {
   if (PROVIDER === 'anthropic') {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 8000, system: sys, messages: [{ role: 'user', content: media ? [{ type: 'image', source: { type: 'base64', media_type: media.mime, data: media.data } }, { type: 'text', text: prompt }] : prompt }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 8000, system: sys, messages: [{ role: 'user', content: prompt }] }),
     });
     const j = await r.json();
-    if (!r.ok) throw fail(j?.error?.message ?? `Anthropic ${r.status}`, r.status);
+    if (!r.ok) throw new Error(j?.error?.message ?? `Anthropic ${r.status}`);
     return j.content?.map((c) => c.text ?? '').join('') ?? '';
   }
   if (PROVIDER === 'openai' || PROVIDER === 'openrouter') {
@@ -110,20 +83,20 @@ async function callModel(prompt, sys, MODEL, media = null) {
     const r = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: sys }, { role: 'user', content: media ? [{ type: 'image_url', image_url: { url: `data:${media.mime};base64,${media.data}` } }, { type: 'text', text: prompt }] : prompt }] }),
+      body: JSON.stringify({ model: MODEL, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }] }),
     });
     const j = await r.json();
-    if (!r.ok) throw fail(j?.error?.message ?? `${PROVIDER} ${r.status}`, r.status);
+    if (!r.ok) throw new Error(j?.error?.message ?? `${PROVIDER} ${r.status}`);
     return j.choices?.[0]?.message?.content ?? '';
   }
   if (PROVIDER === 'gemini') {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: [{ role: 'user', parts: [...(media ? [{ inline_data: { mime_type: media.mime, data: media.data } }] : []), { text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } }),
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } }),
     });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw fail(j?.error?.message ?? `Gemini ${r.status}`, r.status);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j?.error?.message ?? `Gemini ${r.status}`);
     return j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
   }
   throw new Error('Unsupported AI_PROVIDER');
@@ -170,7 +143,7 @@ aiRouter.post('/assist', rateLimit({ windowMs: 60 * 60_000, max: 120 }), async (
     const j = m ? JSON.parse(m[0]) : { text: raw.trim() };
     res.json({ text: String(j.text ?? '').trim(), front: String(j.front ?? '').trim(), back: String(j.back ?? '').trim() });
   } catch (e) {
-    res.status(e.code === 'aiBusy' ? 503 : 502).json({ error: e.code === 'aiBusy' ? 'aiBusy' : e.message });
+    res.status(502).json({ error: e.message });
   }
 });
 
@@ -189,8 +162,6 @@ aiRouter.post('/generate', rateLimit({ windowMs: 60 * 60_000, max: 40 }), async 
     const cards = parseCards(await callAI(buildPrompt({ topic, text, count, language, format, detail, instructions }))).slice(0, count);
     res.json({ cards });
   } catch (e) {
-    res.status(e.code === 'aiBusy' ? 503 : 502).json({ error: e.code === 'aiBusy' ? 'aiBusy' : e.message });
+    res.status(502).json({ error: e.message });
   }
 });
-export { callAI as _callAI }; // for tests
-export { callAI, buildPrompt, parseCards };

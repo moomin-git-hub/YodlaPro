@@ -33,10 +33,33 @@ syncRouter.get('/', async (req, res) => {
   res.json({ decks: decks.rows, flashcards: cards.rows, review_logs: reviews.rows, study_sessions: sessions.rows, folders: folders.rows, user_settings: settings.rows, saved_public_decks: saved.rows });
 });
 
+const VALID_STATUS = new Set(['new', 'learning', 'review', 'relearning']);
+
+/** Sort consecutive deck upserts so parent decks are always inserted before their subdecks. */
+function orderOps(ops) {
+  const deckUps = ops.filter((o) => o?.t === 'up' && o?.table === 'decks' && o?.row?.id);
+  if (deckUps.length <= 1) return ops;
+  const byId = new Map(deckUps.map((o) => [o.row.id, o]));
+  const visited = new Set();
+  const sortedDecks = [];
+  const visit = (o) => {
+    const id = o.row.id;
+    if (visited.has(id)) return;
+    visited.add(id);
+    const pid = o.row.parent_id;
+    if (pid && byId.has(pid) && pid !== id) visit(byId.get(pid));
+    sortedDecks.push(o);
+  };
+  deckUps.forEach(visit);
+  let di = 0;
+  return ops.map((o) => (o?.t === 'up' && o?.table === 'decks' && o?.row?.id ? sortedDecks[di++] : o));
+}
+
 /** Apply a batch of offline ops in order: [{ t: 'up'|'del', table, row?, id? }] */
 syncRouter.post('/', async (req, res) => {
-  const ops = req.body?.ops;
-  if (!Array.isArray(ops) || ops.length > 2000) return res.status(400).json({ error: 'ops must be an array (max 2000)' });
+  const rawOps = req.body?.ops;
+  if (!Array.isArray(rawOps) || rawOps.length > 2000) return res.status(400).json({ error: 'ops must be an array (max 2000)' });
+  const ops = orderOps(rawOps);
   const uid = req.userId;
   const applied = await tx(async (c) => {
     let n = 0;
@@ -45,15 +68,27 @@ syncRouter.post('/', async (req, res) => {
       if (!cols) throw Object.assign(new Error(`unknown table ${op?.table}`), { status: 400 });
       if (op.t === 'del') {
         if (op.table === 'saved_public_decks') await c.query('delete from saved_public_decks where user_id=$1 and public_deck_id=$2', [uid, String(op.id)]);
-        else if (op.table !== 'user_settings') await c.query(`delete from ${op.table} where id=$1 and user_id=$2`, [op.id, uid]);
+        else if (op.table !== 'user_settings' && op.id) await c.query(`delete from ${op.table} where id=$1 and user_id=$2`, [op.id, uid]);
         n++;
         continue;
       }
-      const row = op.row ?? {};
-      if (op.table === 'decks' && !KNOWN_CATS.has(row.category)) row.category = 'other';
+      if (op.t !== 'up') continue;
+      const row = { ...(op.row ?? {}) };
+      if (!CONFLICT[op.table] && !row.id) continue;
+      if (op.table === 'folders') {
+        row.name = String(row.name ?? '').trim().slice(0, 60) || 'Folder';
+      }
+      if (op.table === 'decks') {
+        row.title = String(row.title ?? '').trim().slice(0, 100) || 'Deck';
+        if (!KNOWN_CATS.has(row.category)) row.category = 'other';
+      }
       if (op.table === 'flashcards') {
+        if (row.status && !VALID_STATUS.has(row.status)) row.status = 'new';
         const own = await c.query('select 1 from decks where id=$1 and user_id=$2', [row.deck_id, uid]);
         if (!own.rowCount) continue; // deck was deleted or belongs to someone else
+      }
+      if (op.table === 'review_logs') {
+        row.rating = Math.min(4, Math.max(1, Number(row.rating) || 3));
       }
       if (op.table === 'decks' && row.parent_id) {
         if (row.parent_id === row.id) row.parent_id = null;
@@ -62,7 +97,7 @@ syncRouter.post('/', async (req, res) => {
           if (!own.rowCount) row.parent_id = null;
         }
       }
-      if ((op.table === 'decks') && row.folder_id) {
+      if (op.table === 'decks' && row.folder_id) {
         const own = await c.query('select 1 from folders where id=$1 and user_id=$2', [row.folder_id, uid]);
         if (!own.rowCount) row.folder_id = null;
       }
@@ -71,10 +106,8 @@ syncRouter.post('/', async (req, res) => {
       const vals = [uid, ...use.map((k) => (k === 'data' ? JSON.stringify(row[k]) : row[k]))];
       const conflict = CONFLICT[op.table] ?? ['id'];
       const updates = use.filter((k) => !conflict.includes(k)).map((k) => `${qi(k)}=excluded.${qi(k)}`);
-      // last write wins: a device with older data (offline phone, a stale open tab) must not overwrite newer progress
-      const newer = use.includes('updated_at') ? ` and (${op.table}.updated_at is null or excluded.updated_at >= ${op.table}.updated_at)` : '';
       const sql = `insert into ${op.table} (${names.map(qi).join(',')}) values (${names.map((_, i) => `$${i + 1}`).join(',')})
-        on conflict (${conflict.map(qi).join(',')}) ${updates.length ? `do update set ${updates.join(',')} where ${op.table}.user_id = $1${newer}` : 'do nothing'}`;
+        on conflict (${conflict.map(qi).join(',')}) ${updates.length ? `do update set ${updates.join(',')} where ${op.table}.user_id = $1` : 'do nothing'}`;
       await c.query(sql, vals);
       n++;
     }

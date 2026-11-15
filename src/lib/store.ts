@@ -4,6 +4,7 @@ import { kvGet, kvSet, uid, ls } from './util';
 import { api, cloudEnabled, ApiError } from './api';
 import type { AuthUser } from './auth';
 import { newCardDefaults, schedule, PRESETS, DEFAULT_CONFIG, type Algorithm, type SrsConfig } from './srs';
+import { clozeIndices } from './rich';
 
 export const defaultSettings = (): Settings => ({
   dailyGoal: 20, newPerDay: 20, reminderEnabled: false, reminderTime: '20:00',
@@ -120,19 +121,12 @@ export async function flush() {
   }
 }
 window.addEventListener('online', () => scheduleFlush());
-// Coming back to the tab (e.g. after studying on the phone): fetch what other devices changed.
-let lastPull = 0;
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible' || !user || user.mode !== 'cloud' || !navigator.onLine || Date.now() - lastPull < 30_000) return;
-  lastPull = Date.now();
-  syncNow().catch(() => {});
-});
 
 async function pullCloud() {
   if (!cloudEnabled || !user) return;
   type R = Record<string, unknown>[];
   const r = await api<{ decks: R; flashcards: R; review_logs: R; study_sessions: R; folders: R; user_settings: R; saved_public_decks: R }>('/sync');
-  if (queue.length) return; // a change was made while downloading: keep it, the next sync brings the rest
+  if (queue.length > 0) return; // local changes arrived meanwhile; next sync will pull
   const { decks, flashcards: cards, review_logs: reviews, study_sessions: sessions, folders, user_settings: settings, saved_public_decks: saved } = r;
   const s = settings[0] as { data?: Settings } | undefined;
   set({
@@ -148,8 +142,10 @@ async function pullCloud() {
 }
 
 export async function loadUser(u: AuthUser | null) {
+  clearTimeout(saveTimer);
+  clearTimeout(flushTimer);
   user = u; ready = false;
-  if (!u) { state = empty(); ready = true; emit(); return; }
+  if (!u) { state = empty(); queue = []; syncState.pending = 0; syncState.error = ''; ready = true; emit(); return; }
   const saved = await kvGet<UserData>('data:' + u.id);
   state = saved ? { ...empty(), ...saved, settings: { ...defaultSettings(), ...saved.settings } } : empty();
   queue = (await kvGet<Op[]>('queue:' + u.id)) ?? [];
@@ -192,13 +188,29 @@ export function deleteDeck(id: string) {
   return n;
 }
 
-export function addCards(deckId: string, drafts: (DraftCard & { image?: string })[]): Card[] {
+export function addCards(deckId: string, drafts: (DraftCard & { image?: string; cardType?: string })[]): Card[] {
   const t = now();
-  const cards: Card[] = drafts.map((d, i) => withNote({
-    id: uid(), deckId, front: d.front.trim(), back: d.back.trim(), example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(),
-    image: d.image ?? '', difficult: false, bookmarked: false, ...newCardDefaults(), due: t + i, createdAt: t + i, updatedAt: t,
-  }));
-  function withNote(c: Card): Card { return { ...c, noteId: c.id, cardType: 'basic' }; }
+  const cards: Card[] = [];
+  drafts.forEach((d, i) => {
+    const noteId = uid();
+    const cands = clozeIndices(d.front);
+    if ((d.cardType === 'cloze' || cands.length > 0) && cands.length > 0) {
+      cands.forEach((n, k) => {
+        cards.push({
+          id: uid(), deckId, noteId, cardType: 'cloze', extra: JSON.stringify({ c: n }),
+          front: d.front.trim(), back: (d.back ?? '').trim(), example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(),
+          image: d.image ?? '', difficult: false, bookmarked: false, ...newCardDefaults(), due: t + i + k, createdAt: t + i + k, updatedAt: t,
+        });
+      });
+    } else {
+      const id = uid();
+      cards.push({
+        id, deckId, noteId: id, cardType: 'basic',
+        front: d.front.trim(), back: (d.back ?? '').trim(), example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(),
+        image: d.image ?? '', difficult: false, bookmarked: false, ...newCardDefaults(), due: t + i, createdAt: t + i, updatedAt: t,
+      });
+    }
+  });
   set({ cards: [...state.cards, ...cards] }, cards.map((c) => ({ t: 'up', table: 'flashcards', row: toRow(c) })));
   return cards;
 }
@@ -229,34 +241,60 @@ export function resetProgress(ids: string[]) {
 export const algoFor = (deck?: Deck): Algorithm => deck?.algorithm ?? 'fsrs';
 export function presetFor(deck?: Deck): SrsConfig {
   const id = deck?.preset ?? state.settings.defaultPreset ?? 'standard';
-  const base = id === 'custom' ? { ...DEFAULT_CONFIG, ...(state.settings.customPreset ?? {}) } : PRESETS[id as keyof typeof PRESETS] ?? DEFAULT_CONFIG;
-  return { ...base, newPerDay: state.settings.newPerDay }; // one global, user-adjustable "new words per day"
+  if (id === 'custom') return { ...DEFAULT_CONFIG, ...(state.settings.customPreset ?? {}) };
+  return PRESETS[id as keyof typeof PRESETS] ?? DEFAULT_CONFIG;
 }
 
 /** All cards of the same note (forward card + its reverse sibling, cloze siblings…). */
 export const noteOf = (c: Card) => state.cards.filter((x) => (x.noteId ?? x.id) === (c.noteId ?? c.id));
 export const hasReverse = (c: Card) => noteOf(c).some((x) => x.cardType === 'reverse');
 
-/** Saves a basic note's content to all its cards and adds/removes the reverse sibling. */
+/** Saves a note's content to all its sibling cards (basic/reverse, cloze, or occlusion). */
 export function saveBasicNote(card: Card, patch: Partial<Card>, reversed: boolean) {
   const t = now(), noteId = card.noteId ?? card.id;
   const sib = noteOf(card);
   const ops: Op[] = [];
   const content = { front: patch.front, back: patch.back, example: patch.example, explanation: patch.explanation, image: patch.image, deckId: patch.deckId } as Partial<Card>;
   Object.keys(content).forEach((k) => content[k as keyof Card] === undefined && delete content[k as keyof Card]);
+  const newFront = content.front ?? card.front;
+  const cands = clozeIndices(newFront);
+  if (card.cardType === 'cloze' || ((!card.cardType || card.cardType === 'basic') && cands.length > 0)) {
+    const keep: Card[] = [];
+    cands.forEach((idx, i) => {
+      const ex = sib.find((x) => {
+        if (x.cardType !== 'cloze') return false;
+        try { return JSON.parse(x.extra || '{}').c === idx; } catch { return false; }
+      }) ?? (i === 0 ? sib[0] : undefined);
+      const baseCard = ex ?? { ...card, ...newCardDefaults(), id: uid(), createdAt: t + i };
+      const n: Card = {
+        ...baseCard, ...content, ...(baseCard.id === card.id ? patch : {}),
+        noteId, cardType: 'cloze', extra: JSON.stringify({ c: idx }), updatedAt: t,
+      };
+      keep.push(n);
+      ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
+    });
+    const keepIds = new Set(keep.map((k) => k.id));
+    const removed = sib.filter((x) => !keepIds.has(x.id));
+    removed.forEach((r) => ops.push({ t: 'del', table: 'flashcards', id: r.id }));
+    const sibIds = new Set(sib.map((x) => x.id));
+    set({ cards: [...state.cards.filter((c) => !sibIds.has(c.id)), ...keep] }, ops);
+    return;
+  }
   let cards = state.cards.map((c) => {
     if (!sib.includes(c)) return c;
     const n: Card = { ...c, ...content, ...(c.id === card.id ? patch : {}), noteId, updatedAt: t };
     ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
     return n;
   });
-  const rev = sib.find((x) => x.cardType === 'reverse');
-  if (reversed && !rev) {
-    const base = cards.find((c) => c.id === card.id)!;
-    const n: Card = { ...base, ...newCardDefaults(), id: uid(), noteId, cardType: 'reverse', difficult: false, bookmarked: false, frozen: false, createdAt: t + 1, updatedAt: t };
-    cards = [...cards, n]; ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
-  } else if (!reversed && rev) {
-    cards = cards.filter((c) => c.id !== rev.id); ops.push({ t: 'del', table: 'flashcards', id: rev.id });
+  if (!card.cardType || card.cardType === 'basic' || card.cardType === 'reverse') {
+    const rev = sib.find((x) => x.cardType === 'reverse');
+    if (reversed && !rev) {
+      const base = cards.find((c) => c.id === card.id)!;
+      const n: Card = { ...base, ...newCardDefaults(), id: uid(), noteId, cardType: 'reverse', difficult: false, bookmarked: false, frozen: false, createdAt: t + 1, updatedAt: t };
+      cards = [...cards, n]; ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
+    } else if (!reversed && rev) {
+      cards = cards.filter((c) => c.id !== rev.id); ops.push({ t: 'del', table: 'flashcards', id: rev.id });
+    }
   }
   set({ cards }, ops);
 }
@@ -339,29 +377,62 @@ export function toggleSavedPublic(pid: string) {
 export function exportBackup() {
   return JSON.stringify({ app: 'yodla', version: 1, exportedAt: new Date().toISOString(), data: state }, null, 2);
 }
+function sortDecksParentFirst(decks: Deck[]): Deck[] {
+  const byId = new Map(decks.map((d) => [d.id, d]));
+  const visited = new Set<string>();
+  const out: Deck[] = [];
+  const visit = (d: Deck) => {
+    if (visited.has(d.id)) return;
+    visited.add(d.id);
+    if (d.parentId && byId.has(d.parentId) && d.parentId !== d.id) visit(byId.get(d.parentId)!);
+    out.push(d);
+  };
+  decks.forEach(visit);
+  return out;
+}
+
+function normRecord<T>(raw: unknown): T {
+  const o: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    const ck = k === 'type' ? 'cardType' : camel(k);
+    o[ck] = TIME.has(ck) && typeof v === 'string' ? Date.parse(v) : v;
+  }
+  return o as T;
+}
+
 export function importBackup(json: string) {
   const parsed = JSON.parse(json);
-  const d: UserData = parsed?.data ?? parsed;
-  if (!Array.isArray(d.decks) || !Array.isArray(d.cards)) throw new Error('invalid');
+  const raw = parsed?.data ?? parsed;
+  if (!Array.isArray(raw?.decks) || !Array.isArray(raw?.cards)) throw new Error('invalid');
+  const decks = sortDecksParentFirst(raw.decks.map((x: unknown) => normRecord<Deck>(x)));
+  const cards = raw.cards.map((x: unknown) => { const c = normRecord<Card>(x); return { ...c, noteId: c.noteId || c.id }; });
+  const reviews = (raw.reviews ?? []).map((x: unknown) => normRecord<ReviewLog>(x));
+  const sessions = (raw.sessions ?? []).map((x: unknown) => normRecord<StudySession>(x));
+  const folders = (raw.folders ?? []).map((x: unknown) => normRecord<Folder>(x));
   const keep = <T extends { id: string }>(a: T[], b: T[]): T[] => { const ids = new Set(a.map((x) => x.id)); return [...a, ...b.filter((x) => !ids.has(x.id))]; };
   const next: UserData = {
-    decks: keep(d.decks, state.decks), cards: keep(d.cards, state.cards), reviews: keep(d.reviews ?? [], state.reviews),
-    sessions: keep(d.sessions ?? [], state.sessions), folders: keep(d.folders ?? [], state.folders),
-    savedPublic: Array.from(new Set([...(d.savedPublic ?? []), ...state.savedPublic])), settings: { ...state.settings, ...(d.settings ?? {}) },
+    decks: keep(decks, state.decks), cards: keep(cards, state.cards), reviews: keep(reviews, state.reviews),
+    sessions: keep(sessions, state.sessions), folders: keep(folders, state.folders),
+    savedPublic: Array.from(new Set([...(raw.savedPublic ?? []), ...state.savedPublic])), settings: { ...state.settings, ...(raw.settings ?? {}) },
   };
   const ops: Op[] = [
-    ...d.folders?.map((f) => ({ t: 'up' as const, table: 'folders' as const, row: toRow(f) })) ?? [],
-    ...d.decks.map((x) => ({ t: 'up' as const, table: 'decks' as const, row: toRow(x) })),
-    ...d.cards.map((x) => ({ t: 'up' as const, table: 'flashcards' as const, row: toRow(x) })),
-    ...(d.reviews ?? []).map((x) => ({ t: 'up' as const, table: 'review_logs' as const, row: toRow(x) })),
-    ...(d.sessions ?? []).map((x) => ({ t: 'up' as const, table: 'study_sessions' as const, row: toRow(x) })),
+    ...folders.map((f: Folder) => ({ t: 'up' as const, table: 'folders' as const, row: toRow(f) })),
+    ...decks.map((x: Deck) => ({ t: 'up' as const, table: 'decks' as const, row: toRow(x) })),
+    ...cards.map((x: Card) => ({ t: 'up' as const, table: 'flashcards' as const, row: toRow(x) })),
+    ...reviews.map((x: ReviewLog) => ({ t: 'up' as const, table: 'review_logs' as const, row: toRow(x) })),
+    ...sessions.map((x: StudySession) => ({ t: 'up' as const, table: 'study_sessions' as const, row: toRow(x) })),
   ];
   set(next, ops);
-  return { decks: d.decks.length, cards: d.cards.length };
+  return { decks: decks.length, cards: cards.length };
 }
 
 export function wipeData() {
   const ops: Op[] = state.decks.map((d) => ({ t: 'del', table: 'decks', id: d.id }));
-  ops.push(...state.reviews.map((r) => ({ t: 'del' as const, table: 'review_logs' as const, id: r.id })), ...state.sessions.map((s) => ({ t: 'del' as const, table: 'study_sessions' as const, id: s.id })), ...state.folders.map((f) => ({ t: 'del' as const, table: 'folders' as const, id: f.id })));
+  ops.push(
+    ...state.reviews.map((r) => ({ t: 'del' as const, table: 'review_logs' as const, id: r.id })),
+    ...state.sessions.map((s) => ({ t: 'del' as const, table: 'study_sessions' as const, id: s.id })),
+    ...state.folders.map((f) => ({ t: 'del' as const, table: 'folders' as const, id: f.id })),
+    ...state.savedPublic.map((id) => ({ t: 'del' as const, table: 'saved_public_decks' as const, id })),
+  );
   set({ ...empty(), settings: { ...state.settings, onboarded: true } }, ops);
 }

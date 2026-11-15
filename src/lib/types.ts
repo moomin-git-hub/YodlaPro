@@ -79,7 +79,6 @@ export type Theme = 'light' | 'dark' | 'system';
 export interface Settings {
   dailyGoal: number;
   newPerDay: number;
-  flipCards?: boolean; // false = Noji-style reveal under the question
   defaultAlgorithm?: 'fsrs' | 'sm2' | 'fast';
   defaultPreset?: string;
   customPreset?: import('./srs').SrsConfig;

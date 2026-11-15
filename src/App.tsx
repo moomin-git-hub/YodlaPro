@@ -9,7 +9,6 @@ import { Decks, FolderPage } from './pages/Decks';
 import { DeckDetail } from './pages/DeckDetail';
 import { DeckEditor } from './pages/DeckEditor';
 import { DeckSettings } from './pages/DeckSettings';
-import { Activity } from './pages/Activity';
 import { CardEditor } from './pages/CardEditor';
 import { Study } from './pages/Study';
 import { Explore, PublicDeckPage } from './pages/Explore';
@@ -25,7 +24,6 @@ import { ls } from './lib/util';
 import { isDue } from './lib/srs';
 import { todayStats } from './lib/stats';
 import { translate } from './lib/i18n';
-import { toast } from './components/ui';
 
 const AiGenerator = lazy(() => import('./pages/AiGenerator'));
 
@@ -70,16 +68,6 @@ function useReminders() {
   }, [s.reminderEnabled, s.reminderTime, s.lang]);
 }
 
-function useUpdateNotice() {
-  useEffect(() => {
-    try {
-      const seen = localStorage.getItem('yodla:version');
-      if (seen && seen !== __APP_VERSION__) setTimeout(() => toast(translate(getData().settings.lang, 'updatedTo', { n: __APP_VERSION__ })), 1500);
-      localStorage.setItem('yodla:version', __APP_VERSION__);
-    } catch { /* storage unavailable */ }
-  }, []);
-}
-
 export function App() {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
@@ -88,7 +76,6 @@ export function App() {
   const data = useData();
   useTheme();
   useReminders();
-  useUpdateNotice();
 
   useEffect(() => {
     let cur: string | null | undefined;
@@ -140,7 +127,6 @@ export function App() {
             <Route path="create/import" element={<ImportPage />} />
             <Route path="profile" element={<Profile />} />
             <Route path="stats" element={<Stats />} />
-            <Route path="activity" element={<Activity />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="home" element={<Navigate to="/" replace />} />
             <Route path="*" element={<NotFound />} />

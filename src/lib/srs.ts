@@ -70,9 +70,8 @@ export const fsrs = {
     const hard = g === 2 ? W[15] : 1, easy = g === 4 ? W[16] : 1;
     return s * (1 + Math.exp(W[8]) * (11 - d) * Math.pow(s, -W[9]) * (Math.exp((1 - r) * W[10]) - 1) * hard * easy);
   },
-  /** Post-lapse stability, capped at S / e^(w17·w18) exactly like the official FSRS-5 (ts-fsrs 4.x). */
   forgetS(d: number, s: number, r: number) {
-    return Math.min(W[11] * Math.pow(d, -W[12]) * (Math.pow(s + 1, W[13]) - 1) * Math.exp((1 - r) * W[14]), s / Math.exp(W[17] * W[18]));
+    return Math.min(W[11] * Math.pow(d, -W[12]) * (Math.pow(s + 1, W[13]) - 1) * Math.exp((1 - r) * W[14]), s);
   },
   shortS(s: number, g: Rating) {
     const n = s * Math.exp(W[17] * (g - 3 + W[18]));
@@ -100,14 +99,6 @@ export function fuzz(days: number, seed: string, maxI: number) {
 }
 
 // ---------------- scheduler ----------------
-/**
- * FSRS learning phase (Noji-style, one pass): Again → 1m, Hard → 15m, Good/Easy → leaves learning.
- * A brand-new word graduates conservatively to 1d (Good) / 4d (Easy); from then on FSRS stability decides.
- */
-export const FSRS_AGAIN_MIN = 1, FSRS_HARD_MIN = 15, FIRST_GOOD_DAYS = 1, FIRST_EASY_DAYS = 4;
-/** A forgotten review card (Again) is relearned in the same session, 10 minutes later. */
-export const FSRS_LAPSE_MIN = 10;
-
 export interface Scheduled {
   status: Card['status'];
   step: number;
@@ -149,7 +140,7 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
   }
   const maxI = Math.max(1, cfg.maxIntervalDays);
   const seed = card.id + ':' + reps;
-  const elapsed = elapsedDays(card, now);
+  const elapsed = card.lastReview ? Math.max(0, (now - card.lastReview) / DAY) : 0;
   const learn = steps(cfg.learningSteps), relearn = steps(cfg.relearningSteps);
   const inLearning = card.status === 'new' || card.status === 'learning';
   const inRelearning = card.status === 'relearning';
@@ -177,25 +168,9 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
     return clamp(g === 4 ? cfg.easyDays : cfg.graduatingDays, 1, maxI);
   };
   // stability the card would have if the answer were Good (used to keep Easy > Good when graduating)
-  /** Fuzzed graduation interval; Easy always stays at least one day above Good (also after fuzz). */
-  const gradFuzz = (g: 3 | 4, goodBase: number, easyBase: number) => {
-    const gi = fuzz(goodBase, seed + 'G', maxI);
-    return g === 3 ? gi : Math.min(maxI, Math.max(fuzz(easyBase, seed + 'E', maxI), gi + 1));
-  };
   const goodS = () => (card.stability && card.stability > 0 && card.difficulty ? fsrsUpdate(card.stability, card.difficulty, elapsed, 3).s : card.status === 'review' && card.interval > 0 ? s : fsrs.initS(3));
 
-  if ((inLearning || inRelearning) && algo === 'fsrs') {
-    const lst = inRelearning ? 'relearning' : 'learning';
-    if (rating === 1) { step = 0; status = lst; due = now + FSRS_AGAIN_MIN * MIN; }
-    else if (rating === 2) { step = 0; status = lst; due = now + FSRS_HARD_MIN * MIN; }
-    else {
-      const g = rating as 3 | 4;
-      interval = inRelearning
-        ? gradFuzz(g, clamp(Math.max(1, Math.round(fsrs.intervalFor(goodS(), cfg.desiredRetention))), 1, maxI), graduate(4))
-        : Math.min(graduate(g), g === 4 ? FIRST_EASY_DAYS : FIRST_GOOD_DAYS, maxI);
-      status = 'review'; step = 0; due = now + interval * DAY;
-    }
-  } else if (inLearning || inRelearning) {
+  if (inLearning || inRelearning) {
     if (rating === 1) { step = 0; status = inRelearning ? 'relearning' : 'learning'; due = now + st[0] * MIN; }
     else if (rating === 2) { status = inRelearning ? 'relearning' : 'learning'; due = now + hardDelay(st, step) * MIN; }
     else if (rating === 3 && step + 1 < st.length) { step += 1; status = inRelearning ? 'relearning' : 'learning'; due = now + st[step] * MIN; }
@@ -203,12 +178,12 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
       // graduate (Good on last step, or Easy)
       const g = rating as 3 | 4;
       if (inRelearning) {
-        const base = clamp(Math.max(1, interval), 1, maxI);
-        interval = gradFuzz(g, base, base + 1);
+        interval = algo === 'fsrs' ? graduate(g) : clamp(Math.max(1, interval) + (g === 4 ? 1 : 0), 1, maxI);
       } else {
-        interval = gradFuzz(g, graduate(3), graduate(4));
+        interval = graduate(g);
         if (algo === 'sm2' && g === 4) ease += 0.15;
       }
+      interval = fuzz(interval, seed + 'G', maxI);
       status = 'review'; step = 0; due = now + interval * DAY;
     }
   } else {
@@ -217,8 +192,7 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
       lapses += 1;
       if (algo === 'sm2') { ease = Math.max(1.3, ease - 0.2); interval = Math.max(1, Math.round(interval * cfg.lapseFactor)); }
       else interval = clamp(Math.round(fsrs.intervalFor(s, cfg.desiredRetention)), 1, maxI);
-      if (algo === 'fsrs') { status = 'relearning'; step = 0; due = now + FSRS_LAPSE_MIN * MIN; }
-      else if (cfg.relearningSteps.length) { status = 'relearning'; step = 0; due = now + relearn[0] * MIN; }
+      if (cfg.relearningSteps.length) { status = 'relearning'; step = 0; due = now + relearn[0] * MIN; }
       else { status = 'review'; due = now + interval * DAY; }
     } else {
       let h: number, g: number, e: number;
@@ -242,17 +216,6 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
   return { status, step, ease: round2(ease), interval, due: Math.round(due), reps, lapses, stability: algo === 'fsrs' ? round4(s) : base.stability, difficulty: algo === 'fsrs' ? round4(d) : base.difficulty };
 }
 
-/**
- * Days since the last review, counted in CALENDAR days like FSRS does (a card reviewed at 21:00 and again
- * the next morning is 1 day, not 0.46 — otherwise the same-day formula would wrongly be used for a due review).
- * Cards with no review history in this app (imported / older data) are assumed to be reviewed on time.
- */
-export function elapsedDays(card: Pick<CardState, 'lastReview' | 'status' | 'interval' | 'due'>, now: number) {
-  if (card.lastReview) return Math.max(0, Math.round((startOfDay(now) - startOfDay(card.lastReview)) / DAY));
-  if (card.status === 'review' && card.interval > 0) return Math.max(0, Math.round(card.interval + (startOfDay(now) - startOfDay(card.due)) / DAY));
-  return 0;
-}
-
 /** One FSRS memory update: long-term formula after ≥1 day, short-term (same-day) formula otherwise. */
 function fsrsUpdate(s: number, d: number, elapsedDays: number, g: Rating) {
   let ns: number;
@@ -274,8 +237,8 @@ export function formatDuration(ms: number) {
   const h = Math.round(m / 60);
   if (h < 24) return `${h}h`;
   const d = Math.round(ms / DAY);
-  if (d < 60) return `${d}d`; // days up to 2 months so Hard/Good/Easy never read the same
-  const mo = Math.round(d / 3) / 10; // months, one decimal
+  if (d < 31) return `${d}d`;
+  const mo = Math.round(d / 30);
   if (mo < 12) return `${mo}mo`;
   return `${(d / 365).toFixed(1)}y`;
 }
@@ -285,7 +248,7 @@ export const startOfDay = (ts: number) => { const d = new Date(ts); d.setHours(0
 export const dayKey = (ts: number) => { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
 /** Due today: review cards due before end of day; learning cards whose step has elapsed (or will within today). */
-export const isDue = (c: Card, now = Date.now()) => !c.frozen && c.status !== 'new' && c.due <= endOfToday(now);
+export const isDue = (c: Card, now = Date.now()) => !c.frozen && c.status !== 'new' && c.due <= (c.status === 'review' ? endOfToday(now) : endOfToday(now));
 export const isDueNow = (c: Card, now = Date.now()) => !c.frozen && c.status !== 'new' && c.due <= now;
 export const isMastered = (c: Card) => c.status === 'review' && c.interval >= MASTERED_DAYS;
 export const isHard = (c: Card) => c.difficult || c.lapses >= 3 || (c.difficulty ? c.difficulty >= 8 : c.reps > 2 && c.ease < 2);

@@ -39,7 +39,6 @@ export async function initAuth(): Promise<AuthUser | null> {
     const sp = new URLSearchParams(location.search);
     const rt = sp.get('reset');
     if (rt) { resetToken = rt; recoveryMode = true; history.replaceState(null, '', location.pathname + location.hash); }
-    if (!getToken()) await telegramMiniAppSignIn();
     if (getToken()) {
       try {
         const r = await api<{ user: ServerUser }>('/auth/me');
@@ -92,16 +91,6 @@ export function activateLocal(id: string) {
   emit(toUser(a));
 }
 
-/** Opened as a Telegram Mini App (@yodlaPro_bot): sign in with the linked account, no password needed. */
-export async function telegramMiniAppSignIn() {
-  const tgw = (window as unknown as { Telegram?: { WebApp?: { initData?: string; ready?: () => void; expand?: () => void } } }).Telegram?.WebApp;
-  if (!cloudEnabled || !tgw?.initData) return false;
-  tgw.ready?.(); tgw.expand?.();
-  if (getToken()) return true;
-  try { cloudSession(await api('/auth/telegram', { body: { initData: tgw.initData }, auth: false })); return true; }
-  catch { return false; }
-}
-
 export async function signIn(email: string, password: string) {
   email = email.trim().toLowerCase();
   if (!isEmail(email)) throw new AuthError('invalidEmail');
@@ -128,7 +117,12 @@ export function continueAsGuest() {
 }
 
 export async function signOut() {
-  if (current?.mode === 'cloud') { setToken(null); ls.set(CU, null); }
+  if (current?.mode === 'cloud') {
+    const { flush } = await import('./store');
+    await flush().catch(() => {});
+    setToken(null);
+    ls.set(CU, null);
+  }
   ls.set(SES, null);
   emit(null);
 }

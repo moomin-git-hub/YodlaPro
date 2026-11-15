@@ -9,7 +9,7 @@ import { storeImage } from '../lib/api';
 import { formatDuration } from '../lib/srs';
 import { Button, Field, IconButton, PageHeader, Toggle, confirmDialog, toast } from '../components/ui';
 import { RichEditor } from '../components/RichEditor';
-import { isBlank, plainText } from '../lib/rich';
+import { isBlank, plainText, clozeIndices } from '../lib/rich';
 import { aiAssist } from '../lib/ai';
 import { getUser } from '../lib/auth';
 import { cloudEnabled } from '../lib/api';
@@ -53,11 +53,13 @@ export function CardEditor() {
       if (act === 'improve' || act === 'question') setEditorKey((k) => k + 1);
     } catch (e) { toast((e as Error).message, 'err'); }
   };
+  const isCloze = card?.cardType === 'cloze' || clozeIndices(f.front).length > 0;
+  const isOcc = card?.cardType === 'occlusion';
   const validate = () => {
     const e: Record<string, string> = {};
     if (!deckId) e.deck = t('selectDeck');
-    if (isBlank(f.front)) e.front = t('required'); else if (plainText(f.front).length > 2000) e.front = t('tooLong', { n: 2000 });
-    if (isBlank(f.back)) e.back = t('required'); else if (plainText(f.back).length > 4000) e.back = t('tooLong', { n: 4000 });
+    if (!isOcc && isBlank(f.front)) e.front = t('required'); else if (plainText(f.front).length > 2000) e.front = t('tooLong', { n: 2000 });
+    if (!isCloze && !isOcc && isBlank(f.back)) e.back = t('required'); else if (plainText(f.back).length > 4000) e.back = t('tooLong', { n: 4000 });
     if (f.example.length > 2000) e.example = t('tooLong', { n: 2000 });
     if (f.explanation.length > 4000) e.explanation = t('tooLong', { n: 4000 });
     setErrs(e);
@@ -68,7 +70,7 @@ export function CardEditor() {
     localStorage.setItem('yodla:lastDeck', deckId);
     if (card) {
       const patch = { ...f, ...flags, deckId, front: f.front.trim(), back: f.back.trim() };
-      if (basic) saveBasicNote(card, patch, reversed); else updateCard(card.id, patch);
+      saveBasicNote(card, patch, reversed);
       toast(t('saved')); nav(-1); return;
     }
     const [c] = addCards(deckId, [f]);

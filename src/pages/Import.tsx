@@ -11,11 +11,12 @@ import type { DraftCard } from '../lib/types';
 function parse(text: string): { cards: DraftCard[]; deck?: { title: string; description?: string; category?: string; cover?: string; color?: string } } {
   const s = text.trim();
   if (!s) return { cards: [] };
-  if (s.startsWith('{') || s.startsWith('[')) {
+  const hasCloze = (f: string) => /\{\{c\d+::/.test(f);
+  if ((s.startsWith('{') && !s.startsWith('{{')) || s.startsWith('[')) {
     try {
       const j = JSON.parse(s);
       const arr = Array.isArray(j) ? j : j.cards;
-      const cards = (arr ?? []).map((c: Record<string, string>) => ({ front: String(c.front ?? c.question ?? c.q ?? ''), back: String(c.back ?? c.answer ?? c.a ?? ''), example: c.example ?? '', explanation: c.explanation ?? '' })).filter((c: DraftCard) => c.front.trim() && c.back.trim());
+      const cards = (arr ?? []).map((c: Record<string, string>) => ({ front: String(c.front ?? c.question ?? c.q ?? ''), back: String(c.back ?? c.answer ?? c.a ?? ''), example: c.example ?? '', explanation: c.explanation ?? '' })).filter((c: DraftCard) => c.front.trim() && (c.back.trim() || hasCloze(c.front)));
       return { cards, deck: j.deck };
     } catch { return { cards: [] }; }
   }
@@ -25,7 +26,7 @@ function parse(text: string): { cards: DraftCard[]; deck?: { title: string; desc
   return {
     cards: (header ? rows.slice(1) : rows)
       .map((r) => ({ front: (r[0] ?? '').replace(/<[^>]+>/g, '').trim(), back: (r[1] ?? '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim(), example: (r[2] ?? '').trim(), explanation: (r[3] ?? '').trim() }))
-      .filter((c) => c.front && c.back),
+      .filter((c) => c.front && (c.back || hasCloze(c.front))),
   };
 }
 

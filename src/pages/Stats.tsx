@@ -7,31 +7,6 @@ import { dayCounts, streaks, totalStudyMs, deckStats, forecast, lastNDays, fmtTi
 import { dayKey, isMastered, DAY, startOfDay } from '../lib/srs';
 import { Bars, DeckCover, Empty, PageHeader, Ring, Segmented } from '../components/ui';
 import { cx } from '../lib/util';
-import { FileText, Sheet as SheetIcon, FileType2 } from 'lucide-react';
-import { cloudEnabled, getToken } from '../lib/api';
-import { downloadReport } from '../components/TelegramCard';
-import { toast } from '../components/ui';
-
-/** PDF overview, Excel with every card, Word hard-words notebook (built on the server). */
-function Reports() {
-  const { t } = useT();
-  const [busy, setBusy] = useState<string | null>(null);
-  if (!cloudEnabled || !getToken()) return null;
-  const items = [['pdf', 'PDF', <FileText key="p" size={18} />, 'text-rose-500 bg-rose-500/10'], ['xlsx', 'Excel', <SheetIcon key="x" size={18} />, 'text-emerald-600 bg-emerald-500/10'], ['docx', 'Word', <FileType2 key="w" size={18} />, 'text-sky-600 bg-sky-500/10']] as const;
-  return (
-    <section className="card-surface rounded-3xl p-4">
-      <p className="mb-3 font-bold">{t('reports')}</p>
-      <div className="grid grid-cols-3 gap-2">
-        {items.map(([fmt, label, icon, tone]) => (
-          <button key={fmt} disabled={!!busy} onClick={async () => { setBusy(fmt); try { await downloadReport(fmt); } catch (e) { toast((e as Error).message, 'err'); } finally { setBusy(null); } }}
-            className="flex flex-col items-center gap-1.5 rounded-2xl bg-ink-900/[.04] p-3 text-sm font-bold transition hover:bg-ink-900/[.08] disabled:opacity-50 dark:bg-white/5">
-            <span className={cx('grid h-9 w-9 place-items-center rounded-xl', tone)}>{busy === fmt ? '…' : icon}</span>{label}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 export function Stats() {
   const d = useData();
@@ -65,7 +40,6 @@ export function Stats() {
   return (
     <div className="space-y-5">
       <PageHeader title={t('stats')} />
-      <Reports />
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile icon={<BookOpen size={18} />} tone="text-sky-500 bg-sky-500/10" label={t('totalStudied')} value={s.studied} />
         <Tile icon={<GraduationCap size={18} />} tone="text-emerald-500 bg-emerald-500/10" label={t('mastered')} value={s.mastered} />
@@ -74,7 +48,7 @@ export function Stats() {
       </section>
       <section className="grid grid-cols-3 gap-3">
         <div className="card-surface flex flex-col items-center rounded-3xl p-4"><Ring value={s.acc / 100} size={76} stroke={8}><span className="text-lg font-extrabold">{s.acc}%</span></Ring><span className="mt-2 text-xs font-semibold opacity-55">{t('accuracy')}</span></div>
-        <Link to="/activity" className="card-surface flex flex-col items-center justify-center rounded-3xl p-4 text-center"><Flame className="text-orange-500" size={28} /><span className="mt-1 text-2xl font-extrabold">{s.st.current}</span><span className="text-xs font-semibold opacity-55">{t('streak')} · <Trophy size={11} className="inline" /> {s.st.best}</span></Link>
+        <div className="card-surface flex flex-col items-center justify-center rounded-3xl p-4 text-center"><Flame className="text-orange-500" size={28} /><span className="mt-1 text-2xl font-extrabold">{s.st.current}</span><span className="text-xs font-semibold opacity-55">{t('streak')} · <Trophy size={11} className="inline" /> {s.st.best}</span></div>
         <div className="card-surface flex flex-col items-center justify-center rounded-3xl p-4 text-center"><Clock className="text-violet-500" size={28} /><span className="mt-1 text-lg font-extrabold leading-tight">{fmtTime(s.time, t)}</span><span className="text-xs font-semibold opacity-55">{t('totalTime')}</span></div>
       </section>
 

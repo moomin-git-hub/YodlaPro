@@ -27,7 +27,6 @@ walk('fsrs-exam-cap', 'fsrs', 'exam', [[3, 0], [3, 0], [3, 0], [4, 0], [4, 0], [
 walk('sm2-path', 'sm2', 'standard', [[3, 0], [3, 0], [3, 0], [3, 2880], [2, 0], [4, 0], [1, 0], [3, 0], [3, 0]]);
 walk('sm2-medical', 'sm2', 'medical', [[2, 0], [3, 0], [3, 0], [3, 0], [3, 0], [4, 0], [1, 0], [3, 0], [3, 0]]);
 walk('fast', 'fast', 'standard', [[1, 0], [3, 0], [4, 0]]);
-walk('fsrs-early-morning', 'fsrs', 'languages', [[3, 0], [3, -780], [1, -600], [3, 0], [3, -900], [2, -300], [3, 2880]]);
 console.log(JSON.stringify({
   vectors: out,
   hash: ['', 'a', 'card-1:3h', 'Ünïcødé ✓'].map((s) => [s, hash01(s)]),

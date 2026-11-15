@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Plus, FolderPlus, Search, AlertTriangle, Bookmark, Layers, ArrowLeft, Settings, Trash2, Play } from 'lucide-react';
 import { useData, saveFolder, deleteFolder, deckTree } from '../lib/store';
-import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { isHard } from '../lib/srs';
 import { COLORS } from '../lib/catalog';
 import { cx } from '../lib/util';
 import type { Folder } from '../lib/types';
 import { DeckTree, FolderRow } from '../components/DeckTree';
+import { todayCount } from '../lib/queue';
 import { Button, Empty, IconButton, PageHeader, Sheet, Field, confirmDialog, toast } from '../components/ui';
 
 const FOLDER_EMOJI = ['📁', '📚', '🗣️', '🎓', '🧪', '💼', '🏨', '🩺', '💻', '🌍', '⭐', '🔥', '🇬🇧', '🇷🇺', '🇸🇦', '📖'];
@@ -78,7 +78,7 @@ export function FolderPage() {
   const folder = d.folders.find((f) => f.id === id);
   const decks = useMemo(() => d.decks.filter((x) => x.folderId === id && !x.parentId && !x.archived).sort((a, b) => b.updatedAt - a.updatedAt), [d.decks, id]);
   if (!folder) return <Empty icon={<Layers size={28} />} title={t('notFound')} action={<Button onClick={() => nav('/decks')}>{t('decks')}</Button>} />;
-  const due = todayCount(d, `folder:${id}`);
+  const due = todayCount(d, `folder:${folder.id}`);
   const allIds = decks.flatMap((x) => deckTree(x.id, d.decks));
 
   return (

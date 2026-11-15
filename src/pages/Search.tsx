@@ -23,7 +23,7 @@ export function SearchPage() {
     const s = q.trim().toLowerCase();
     if (s.length < 1) return null;
     const decks = d.decks.filter((x) => `${x.title} ${x.description}`.toLowerCase().includes(s)).slice(0, 10);
-    const cards = d.cards.filter((c) => plainText(`${c.front} ${c.back}`) + ` ${c.example} ${c.explanation}`.toLowerCase().includes(s)).slice(0, 100);
+    const cards = d.cards.filter((c) => `${plainText(`${c.front} ${c.back}`)} ${c.example} ${c.explanation}`.toLowerCase().includes(s)).slice(0, 100);
     return { decks, cards };
   }, [q, d]);
   const deckOf = (id: string) => d.decks.find((x) => x.id === id);

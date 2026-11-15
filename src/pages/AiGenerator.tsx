@@ -64,7 +64,7 @@ export default function AiGenerator() {
 
   const saveAll = () => {
     if (!drafts) return;
-    const valid = drafts.filter((c) => c.front.trim() && c.back.trim());
+    const valid = drafts.filter((c) => c.front.trim() && (c.back.trim() || /\{\{c\d+::/.test(c.front)));
     if (!deckId) return setDeckErr(t('selectDeck'));
     addCards(deckId, valid);
     toast(t('saveCards', { n: valid.length }));
@@ -92,7 +92,7 @@ export default function AiGenerator() {
             </li>
           ))}
         </ul>
-        <div className="sticky bottom-24 lg:bottom-4"><Button size="lg" block onClick={saveAll} disabled={!drafts.some((c) => c.front.trim() && c.back.trim())} className="shadow-2xl">{t('saveCards', { n: drafts.filter((c) => c.front.trim() && c.back.trim()).length })}</Button></div>
+        <div className="sticky bottom-24 lg:bottom-4"><Button size="lg" block onClick={saveAll} disabled={!drafts.some((c) => c.front.trim() && (c.back.trim() || /\{\{c\d+::/.test(c.front)))} className="shadow-2xl">{t('saveCards', { n: drafts.filter((c) => c.front.trim() && (c.back.trim() || /\{\{c\d+::/.test(c.front))).length })}</Button></div>
       </div>
     );
   }
