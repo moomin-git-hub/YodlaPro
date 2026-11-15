@@ -150,7 +150,7 @@ object Srs {
 
         val maxI = max(1.0, cfg.maxIntervalDays)
         val seed = "${card.id}:$reps"
-        val elapsed = card.lastReview?.let { max(0.0, (now - it) / DAY_MS.toDouble()) } ?: 0.0
+        val elapsed = elapsedDays(card, now)
         val learn = cfg.learningSteps.ifEmpty { listOf(1.0) }
         val relearn = cfg.relearningSteps.ifEmpty { listOf(1.0) }
         val inLearning = card.status == Status.NEW || card.status == Status.LEARNING
@@ -174,6 +174,11 @@ object Srs {
             card.status == Status.REVIEW && card.interval > 0 -> s
             else -> Fsrs.initS(3)
         }
+        /** Fuzzed graduation interval; Easy always stays at least one day above Good (also after fuzz). */
+        fun gradFuzz(g: Int, goodBase: Double, easyBase: Double): Double {
+            val gi = fuzz(goodBase, seed + "G", maxI)
+            return if (g == 3) gi else minOf(maxI, max(fuzz(easyBase, seed + "E", maxI), gi + 1))
+        }
         fun graduate(g: Int): Double {
             if (algo == Algo.FSRS) {
                 val good = max(1.0, jsRound(Fsrs.intervalFor(goodS(), cfg.desiredRetention)).toDouble())
@@ -189,7 +194,7 @@ object Srs {
                 1 -> { step = 0; status = lStatus; due = now + (FSRS_AGAIN_MIN * MIN_MS).roundToLong() }
                 2 -> { step = 0; status = lStatus; due = now + (FSRS_HARD_MIN * MIN_MS).roundToLong() }
                 else -> {
-                    interval = if (inRelearning) fuzz(graduate(rating), seed + "G", maxI)
+                    interval = if (inRelearning) gradFuzz(rating, max(1.0, jsRound(Fsrs.intervalFor(goodS(), cfg.desiredRetention)).toDouble()).coerceIn(1.0, maxI), graduate(4))
                     else minOf(graduate(rating), if (rating == 4) FIRST_EASY_DAYS else FIRST_GOOD_DAYS, maxI)
                     status = Status.REVIEW; step = 0; due = now + (interval * DAY_MS).roundToLong()
                 }
@@ -202,12 +207,12 @@ object Srs {
                 rating == 3 && step + 1 < st.size -> { step += 1; status = lStatus; due = now + (st[step] * MIN_MS).roundToLong() }
                 else -> {
                     interval = if (inRelearning) {
-                        if (algo == Algo.FSRS) graduate(rating) else (max(1.0, interval) + if (rating == 4) 1 else 0).coerceIn(1.0, maxI)
+                        val base = max(1.0, interval).coerceIn(1.0, maxI)
+                        gradFuzz(rating, base, base + 1)
                     } else {
                         if (algo == Algo.SM2 && rating == 4) ease += 0.15
-                        graduate(rating)
+                        gradFuzz(rating, graduate(3), graduate(4))
                     }
-                    interval = fuzz(interval, seed + "G", maxI)
                     status = Status.REVIEW; step = 0; due = now + (interval * DAY_MS).roundToLong()
                 }
             }
@@ -254,6 +259,17 @@ object Srs {
         val mo = (d / 3.0).roundToInt() / 10.0 // months, one decimal
         if (mo < 12) return (if (mo % 1.0 == 0.0) "${mo.toInt()}" else "$mo") + "mo"
         return "%.1fy".format(java.util.Locale.US, d / 365.0)
+    }
+
+    /**
+     * Days since the last review, counted in CALENDAR days like FSRS does (a card reviewed at 21:00 and again
+     * the next morning is 1 day, not 0.46 — otherwise the same-day formula would wrongly be used for a due review).
+     * Cards with no review history in this app (imported / older data) are assumed to be reviewed on time.
+     */
+    fun elapsedDays(card: Card, now: Long): Double {
+        card.lastReview?.let { return max(0.0, jsRound((startOfDay(now) - startOfDay(it)) / DAY_MS.toDouble()).toDouble()) }
+        if (card.status == Status.REVIEW && card.interval > 0) return max(0.0, jsRound(card.interval + (startOfDay(now) - startOfDay(card.due)) / DAY_MS.toDouble()).toDouble())
+        return 0.0
     }
 
     fun startOfDay(ts: Long): Long = Calendar.getInstance().apply {

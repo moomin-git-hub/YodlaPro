@@ -146,7 +146,7 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
   }
   const maxI = Math.max(1, cfg.maxIntervalDays);
   const seed = card.id + ':' + reps;
-  const elapsed = card.lastReview ? Math.max(0, (now - card.lastReview) / DAY) : 0;
+  const elapsed = elapsedDays(card, now);
   const learn = steps(cfg.learningSteps), relearn = steps(cfg.relearningSteps);
   const inLearning = card.status === 'new' || card.status === 'learning';
   const inRelearning = card.status === 'relearning';
@@ -174,6 +174,11 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
     return clamp(g === 4 ? cfg.easyDays : cfg.graduatingDays, 1, maxI);
   };
   // stability the card would have if the answer were Good (used to keep Easy > Good when graduating)
+  /** Fuzzed graduation interval; Easy always stays at least one day above Good (also after fuzz). */
+  const gradFuzz = (g: 3 | 4, goodBase: number, easyBase: number) => {
+    const gi = fuzz(goodBase, seed + 'G', maxI);
+    return g === 3 ? gi : Math.min(maxI, Math.max(fuzz(easyBase, seed + 'E', maxI), gi + 1));
+  };
   const goodS = () => (card.stability && card.stability > 0 && card.difficulty ? fsrsUpdate(card.stability, card.difficulty, elapsed, 3).s : card.status === 'review' && card.interval > 0 ? s : fsrs.initS(3));
 
   if ((inLearning || inRelearning) && algo === 'fsrs') {
@@ -182,7 +187,9 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
     else if (rating === 2) { step = 0; status = lst; due = now + FSRS_HARD_MIN * MIN; }
     else {
       const g = rating as 3 | 4;
-      interval = inRelearning ? fuzz(graduate(g), seed + 'G', maxI) : Math.min(graduate(g), g === 4 ? FIRST_EASY_DAYS : FIRST_GOOD_DAYS, maxI);
+      interval = inRelearning
+        ? gradFuzz(g, clamp(Math.max(1, Math.round(fsrs.intervalFor(goodS(), cfg.desiredRetention))), 1, maxI), graduate(4))
+        : Math.min(graduate(g), g === 4 ? FIRST_EASY_DAYS : FIRST_GOOD_DAYS, maxI);
       status = 'review'; step = 0; due = now + interval * DAY;
     }
   } else if (inLearning || inRelearning) {
@@ -193,12 +200,12 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
       // graduate (Good on last step, or Easy)
       const g = rating as 3 | 4;
       if (inRelearning) {
-        interval = algo === 'fsrs' ? graduate(g) : clamp(Math.max(1, interval) + (g === 4 ? 1 : 0), 1, maxI);
+        const base = clamp(Math.max(1, interval), 1, maxI);
+        interval = gradFuzz(g, base, base + 1);
       } else {
-        interval = graduate(g);
+        interval = gradFuzz(g, graduate(3), graduate(4));
         if (algo === 'sm2' && g === 4) ease += 0.15;
       }
-      interval = fuzz(interval, seed + 'G', maxI);
       status = 'review'; step = 0; due = now + interval * DAY;
     }
   } else {
@@ -230,6 +237,17 @@ export function schedule(card: CardState, rating: Rating, algo: Algorithm, cfg: 
     }
   }
   return { status, step, ease: round2(ease), interval, due: Math.round(due), reps, lapses, stability: algo === 'fsrs' ? round4(s) : base.stability, difficulty: algo === 'fsrs' ? round4(d) : base.difficulty };
+}
+
+/**
+ * Days since the last review, counted in CALENDAR days like FSRS does (a card reviewed at 21:00 and again
+ * the next morning is 1 day, not 0.46 — otherwise the same-day formula would wrongly be used for a due review).
+ * Cards with no review history in this app (imported / older data) are assumed to be reviewed on time.
+ */
+export function elapsedDays(card: Pick<CardState, 'lastReview' | 'status' | 'interval' | 'due'>, now: number) {
+  if (card.lastReview) return Math.max(0, Math.round((startOfDay(now) - startOfDay(card.lastReview)) / DAY));
+  if (card.status === 'review' && card.interval > 0) return Math.max(0, Math.round(card.interval + (startOfDay(now) - startOfDay(card.due)) / DAY));
+  return 0;
 }
 
 /** One FSRS memory update: long-term formula after ≥1 day, short-term (same-day) formula otherwise. */
@@ -264,7 +282,7 @@ export const startOfDay = (ts: number) => { const d = new Date(ts); d.setHours(0
 export const dayKey = (ts: number) => { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
 /** Due today: review cards due before end of day; learning cards whose step has elapsed (or will within today). */
-export const isDue = (c: Card, now = Date.now()) => !c.frozen && c.status !== 'new' && c.due <= (c.status === 'review' ? endOfToday(now) : endOfToday(now));
+export const isDue = (c: Card, now = Date.now()) => !c.frozen && c.status !== 'new' && c.due <= endOfToday(now);
 export const isDueNow = (c: Card, now = Date.now()) => !c.frozen && c.status !== 'new' && c.due <= now;
 export const isMastered = (c: Card) => c.status === 'review' && c.interval >= MASTERED_DAYS;
 export const isHard = (c: Card) => c.difficult || c.lapses >= 3 || (c.difficulty ? c.difficulty >= 8 : c.reps > 2 && c.ease < 2);

@@ -152,7 +152,7 @@
      "due": 1760522960000,
      "reps": 5,
      "lapses": 0,
-     "stability": 2.9019,
+     "stability": 2.8881,
      "difficulty": 7.9585
     },
     {
@@ -165,7 +165,7 @@
      "due": 1760523020000,
      "reps": 6,
      "lapses": 1,
-     "stability": 0.9679,
+     "stability": 0.9658,
      "difficulty": 8.5962
     },
     {
@@ -178,7 +178,7 @@
      "due": 1760609420000,
      "reps": 7,
      "lapses": 1,
-     "stability": 1.3626,
+     "stability": 1.3596,
      "difficulty": 8.5715
     },
     {
@@ -191,7 +191,7 @@
      "due": 1761041420000,
      "reps": 8,
      "lapses": 1,
-     "stability": 4.9827,
+     "stability": 4.98,
      "difficulty": 8.3162
     },
     {
@@ -204,7 +204,7 @@
      "due": 1762337420000,
      "reps": 9,
      "lapses": 1,
-     "stability": 13.3993,
+     "stability": 13.3965,
      "difficulty": 8.2928
     }
    ]
@@ -657,6 +657,104 @@
      "lapses": 0,
      "stability": 0,
      "difficulty": 0
+    }
+   ]
+  },
+  {
+   "name": "fsrs-early-morning",
+   "algo": "fsrs",
+   "preset": "languages",
+   "steps": [
+    {
+     "r": 3,
+     "now": 1760000000000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760086400000,
+     "reps": 1,
+     "lapses": 0,
+     "stability": 3.173,
+     "difficulty": 5.2824
+    },
+    {
+     "r": 3,
+     "now": 1760039600000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 5,
+     "due": 1760471600000,
+     "reps": 2,
+     "lapses": 0,
+     "stability": 5.8692,
+     "difficulty": 5.2729
+    },
+    {
+     "r": 1,
+     "now": 1760435600000,
+     "status": "relearning",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 1,
+     "due": 1760435660000,
+     "reps": 3,
+     "lapses": 1,
+     "stability": 1.4613,
+     "difficulty": 6.7905
+    },
+    {
+     "r": 3,
+     "now": 1760435660000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 2,
+     "due": 1760608460000,
+     "reps": 4,
+     "lapses": 1,
+     "stability": 2.0572,
+     "difficulty": 6.7741
+    },
+    {
+     "r": 3,
+     "now": 1760554460000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 4,
+     "due": 1760900060000,
+     "reps": 5,
+     "lapses": 1,
+     "stability": 4.1167,
+     "difficulty": 6.7578
+    },
+    {
+     "r": 2,
+     "now": 1760882060000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 5,
+     "due": 1761314060000,
+     "reps": 6,
+     "lapses": 1,
+     "stability": 5.792,
+     "difficulty": 7.2652
+    },
+    {
+     "r": 3,
+     "now": 1761486860000,
+     "status": "review",
+     "step": 0,
+     "ease": 2.5,
+     "interval": 16,
+     "due": 1762869260000,
+     "reps": 7,
+     "lapses": 1,
+     "stability": 16.2477,
+     "difficulty": 7.2466
     }
    ]
   }
