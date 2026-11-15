@@ -108,6 +108,7 @@
     <string name="connect">Connect</string>
     <string name="connectAccount">Sign in to sync across devices</string>
     <string name="continueGuest">Use without an account</string>
+    <string name="continueLabel">Continue</string>
     <string name="continueStudying">Continue studying</string>
     <string name="copyToCustom">Tap to copy into Custom</string>
     <string name="cover">Cover</string>
@@ -123,6 +124,7 @@
     <string name="data">Data &amp; backup</string>
     <string name="dateAdded">Date added</string>
     <string name="day">day</string>
+    <string name="dayStreak">Day streak</string>
     <string name="days">days</string>
     <string name="deckDescPh">What is this deck about?</string>
     <string name="deckTitlePh">e.g. Spanish verbs</string>
@@ -345,6 +347,7 @@
     <string name="review">Review</string>
     <string name="reviewGenerated">Review %1$s cards</string>
     <string name="reviewed">Reviewed</string>
+    <string name="reviewedToday">Amazing, you\'ve reviewed %1$s cards today!</string>
     <string name="reviewsCount">%1$s reviews</string>
     <string name="save">Save</string>
     <string name="saveAndAdd">Save &amp; add another</string>
@@ -368,7 +371,6 @@
     <string name="serverNotSet">Not set</string>
     <string name="serverOk">Connected ✓</string>
     <string name="serverUrl">Server address</string>
-    <string name="sessionComplete">Session complete!</string>
     <string name="sessionExpired">Your session expired. Please sign in again.</string>
     <string name="settings">Settings</string>
     <string name="shareToExplore">Publish to Explore</string>

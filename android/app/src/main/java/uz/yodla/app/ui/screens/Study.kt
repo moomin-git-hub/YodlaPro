@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -76,7 +77,10 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
     var empty by remember { mutableStateOf(queue.isEmpty) }
     var menu by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    // the streak celebration is shown once, at the end of the first session of the day
+    var streakSeen by remember { mutableStateOf(d.reviews.any { it.ts >= Srs.startOfDay(now()) }) }
     val answered = remember { mutableStateListOf<String>() } // card ids answered this session (for done/total)
+    val lastRating = remember { mutableStateMapOf<String, Int>() } // previous answer, shown as a badge when the card comes back
     var typing by remember { mutableStateOf(false) }
     var typed by remember { mutableStateOf("") }
     var typedDiff by remember { mutableStateOf<AnswerCheck.Diff?>(null) }
@@ -105,8 +109,10 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
     val left = queue.size + (if (current != null) 1 else 0)
     // Noji-style counter: cards finished for this session / all cards in it (a learning card is finished when it graduates)
     val inSession = remember(queue, current) { (queue.main.map { it.id } + queue.learn.map { it.id } + listOfNotNull(current?.id)).toSet() }
-    val doneCards = answered.distinct().count { it !in inSession }
-    val totalCards = doneCards + left
+    // Noji counter: every answered card counts (Again/Hard too); cards coming back do not add to the total
+    val doneSet = answered.toSet()
+    val doneCards = doneSet.size
+    val totalCards = doneCards + inSession.count { it !in doneSet }
     fun reveal() {
         if (flipped) return
         val c = card ?: return
@@ -147,24 +153,24 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         history += Snap(if (it.mode == QItem.MODE_PRACTICE) null else c, queue, it, reviewed, correct, doneCount)
         if (history.size > 50) history.removeAt(0)
-        scope.launch {
+        scope.launch { try {
             var q = queue
             when (it.mode) {
                 QItem.MODE_PRACTICE -> if (r == 1) q = q.requeue(it)
                 QItem.MODE_FAST -> { repo.review(c.id, r, now() - shownAt); if (r == 1) q = q.requeue(it) }
-                else -> { repo.review(c.id, r, now() - shownAt); repo.dao.card(c.id)?.let { u -> q = q.afterAnswer(u, Srs.endOfToday()) } }
+                else -> { repo.review(c.id, r, now() - shownAt); repo.dao.card(c.id)?.let { u -> q = q.afterAnswer(u, Srs.endOfToday(), now()) } }
             }
             reviewed++; if (r >= 3) correct++; doneCount++
-            answered += c.id
+            answered += c.id; lastRating[c.id] = r
             advance(q)
-            busy = false
-        }
+        } finally { busy = false } }
     }
     fun undo() {
+        if (busy) return
         val last = history.removeLastOrNull() ?: return
         scope.launch {
             last.prev?.let { repo.undoReview(it) }
-            answered.removeLastOrNull()
+            answered.removeLastOrNull()?.let { id -> if (id !in answered) lastRating.remove(id) }
             queue = last.queue; current = last.current; waitUntil = null; finished = false
             reviewed = last.reviewed; correct = last.correct; doneCount = last.done; saved = false; flipped = false; shownAt = now()
         }
@@ -194,8 +200,9 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
                     if (!q.isEmpty) { empty = false; advance(q) }
                 }, canPractice = !repo.buildQueue(target, true).isEmpty, moreCount = more.size, onMore = { empty = false; advance(StudyQueue(more)) })
             }
+            finished && !streakSeen -> StreakScreen(d.reviews) { streakSeen = true }
             finished -> Summary(title, reviewed, correct, now() - started, history.isNotEmpty(), ::undo, onMore = {
-                saved = false; started = now(); reviewed = 0; correct = 0; doneCount = 0; history.clear()
+                saved = false; started = now(); reviewed = 0; correct = 0; doneCount = 0; history.clear(); answered.clear(); lastRating.clear()
                 val q = repo.buildQueue(target, false).let { if (it.isEmpty) StudyQueue(repo.moreNew(target, emptySet())) else it }.let { if (it.isEmpty) repo.buildQueue(target, true) else it }
                 advance(q)
             }, onDone = { exit() })
@@ -217,7 +224,7 @@ fun StudyScreen(nav: NavHostController, target: String, practiceAll: Boolean) {
                 }
                 if (item.mode == QItem.MODE_PRACTICE) Text(stringResource(R.string.practiceMode), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Amber, style = MaterialTheme.typography.labelMedium)
                 if (item.mode == QItem.MODE_FAST) Text(stringResource(R.string.algoFast), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Sky, style = MaterialTheme.typography.labelMedium)
-                FlipCard(card, deck, flipped, style, Modifier.weight(1f).padding(vertical = 12.dp),
+                FlipCard(card, deck, flipped, style, lastRating[card.id], Modifier.weight(1f).padding(vertical = 12.dp),
                     onFlip = { if (!flipped) reveal() else if (d.settings.flipCards) flipped = false },
                     onSwipe = { r -> if (flipped) rate(r) else reveal() }, nav = nav, finish = ::finish)
                 val canType = remember(card.id) { card.typedTarget().isNotBlank() }
@@ -289,7 +296,7 @@ private fun WaitingScreen(until: Long, count: Int, moreCount: Int, onMore: () ->
 }
 
 @Composable
-private fun FlipCard(card: Card, deck: Deck?, flipped: Boolean, style: CardStyle, modifier: Modifier, onFlip: () -> Unit, onSwipe: (Int) -> Unit, nav: NavHostController, finish: () -> Unit) {
+private fun FlipCard(card: Card, deck: Deck?, flipped: Boolean, style: CardStyle, prevRating: Int?, modifier: Modifier, onFlip: () -> Unit, onSwipe: (Int) -> Unit, nav: NavHostController, finish: () -> Unit) {
     val flipMode = appData().settings.flipCards
     val rot by animateFloatAsState(if (flipped && flipMode) 180f else 0f, tween(420), label = "flip")
     val drag = remember(card.id) { Animatable(0f) }
@@ -324,8 +331,17 @@ private fun FlipCard(card: Card, deck: Deck?, flipped: Boolean, style: CardStyle
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(32.dp)).clickable(onClick = onFlip).padding(20.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val (lbl, col) = when (card.status) { Status.NEW -> R.string.newCards to Sky; Status.REVIEW -> R.string.review to Emerald; else -> R.string.learning to Amber }
-                Text(stringResource(lbl).uppercase(), Modifier.clip(CircleShape).background(col.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp), color = col, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold)
+                if (prevRating == 1 || prevRating == 2) {
+                    // the card is back after Again / Hard: show that answer like Noji (red ✕ / orange ~)
+                    val col = if (prevRating == 1) Rose else Amber
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(col.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                        if (prevRating == 1) Icon(Icons.Rounded.Close, stringResource(R.string.again), tint = col, modifier = Modifier.size(26.dp))
+                        else Text("~", color = col, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineSmall)
+                    }
+                } else {
+                    val (lbl, col) = when (card.status) { Status.NEW -> R.string.newCards to Sky; Status.REVIEW -> R.string.review to Emerald; else -> R.string.learning to Amber }
+                    Text(stringResource(lbl).uppercase(), Modifier.clip(CircleShape).background(col.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp), color = col, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold)
+                }
                 Spacer(Modifier.weight(1f))
                 if (settings.tts) SmallIcon(Icons.Rounded.VolumeUp, stringResource(R.string.listen)) {
                     val rev = card.type == CardType.REVERSE
@@ -395,13 +411,14 @@ private fun CaughtUp(onBack: () -> Unit, onPractice: () -> Unit, canPractice: Bo
 
 @Composable
 private fun Summary(title: String, reviewed: Int, correct: Int, ms: Long, canUndo: Boolean, undo: () -> Unit, onMore: () -> Unit, onDone: () -> Unit) {
+    val todayCount = appData().reviews.let { l -> val t = Srs.startOfDay(now()); l.filter { it.ts >= t }.map { it.cardId }.toSet().size }
     val acc = if (reviewed == 0) 0 else (correct * 100f / reviewed).roundToInt()
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Ring(acc / 100f, 150.dp, 14.dp) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Rounded.EmojiEvents, null, tint = Amber, modifier = Modifier.size(30.dp)); Text("$acc%", style = MaterialTheme.typography.headlineMedium) }
         }
         Spacer(Modifier.height(18.dp))
-        Text(stringResource(R.string.sessionComplete), style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.reviewedToday, todayCount), style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
         Text(title, style = Muted)
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -415,5 +432,43 @@ private fun Summary(title: String, reviewed: Int, correct: Int, ms: Long, canUnd
             SecondaryButton(stringResource(R.string.studyMore), onMore, Modifier.weight(1f))
             PrimaryButton(stringResource(R.string.backToDeck), onDone, Modifier.weight(1f))
         }
+    }
+}
+
+/** Noji-style streak celebration: flame, day count and this week's studied days. */
+@Composable
+private fun StreakScreen(reviews: List<ReviewLog>, onContinue: () -> Unit) {
+    val streak = remember(reviews.size) { Stats.streaks(reviews).first }
+    val studied = remember(reviews.size) { reviews.map { Srs.startOfDay(it.ts) }.toSet() }
+    val today = Srs.startOfDay(now())
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = today; set(java.util.Calendar.DAY_OF_WEEK, firstDayOfWeek) }
+    val week = (0 until 7).map { i -> Srs.startOfDay(cal.timeInMillis + i * DAY_MS + DAY_MS / 2) }
+    val dayFmt = remember { java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault()) }
+    val pop = remember { Animatable(0.4f) }
+    LaunchedEffect(Unit) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 300f)) }
+    val scale = pop.value
+    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale }) {
+            Icon(Icons.Rounded.LocalFireDepartment, null, tint = Amber, modifier = Modifier.size(84.dp))
+            Text("$streak", style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
+        }
+        Text(stringResource(R.string.dayStreak), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(32.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            week.forEach { day ->
+                val on = day in studied; val isToday = day == today
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(dayFmt.format(java.util.Date(day)), style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) Amber.copy(alpha = 0.35f) else Color.Transparent)
+                        .border(if (isToday) 2.dp else 0.dp, if (isToday) Amber else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
+                        Text(java.text.SimpleDateFormat("d", java.util.Locale.getDefault()).format(java.util.Date(day)), fontWeight = if (on) FontWeight.ExtraBold else FontWeight.Normal)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.weight(1.2f))
+        PrimaryButton(stringResource(R.string.continueLabel), onContinue, Modifier.fillMaxWidth().height(60.dp))
     }
 }

@@ -71,8 +71,10 @@ syncRouter.post('/', async (req, res) => {
       const vals = [uid, ...use.map((k) => (k === 'data' ? JSON.stringify(row[k]) : row[k]))];
       const conflict = CONFLICT[op.table] ?? ['id'];
       const updates = use.filter((k) => !conflict.includes(k)).map((k) => `${qi(k)}=excluded.${qi(k)}`);
+      // last write wins: a device with older data (offline phone, a stale open tab) must not overwrite newer progress
+      const newer = use.includes('updated_at') ? ` and (${op.table}.updated_at is null or excluded.updated_at >= ${op.table}.updated_at)` : '';
       const sql = `insert into ${op.table} (${names.map(qi).join(',')}) values (${names.map((_, i) => `$${i + 1}`).join(',')})
-        on conflict (${conflict.map(qi).join(',')}) ${updates.length ? `do update set ${updates.join(',')} where ${op.table}.user_id = $1` : 'do nothing'}`;
+        on conflict (${conflict.map(qi).join(',')}) ${updates.length ? `do update set ${updates.join(',')} where ${op.table}.user_id = $1${newer}` : 'do nothing'}`;
       await c.query(sql, vals);
       n++;
     }

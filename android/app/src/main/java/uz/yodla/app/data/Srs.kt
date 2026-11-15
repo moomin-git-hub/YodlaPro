@@ -142,6 +142,8 @@ object Srs {
      * A brand-new word graduates conservatively to 1d (Good) / 4d (Easy); from then on FSRS stability decides.
      */
     const val FSRS_AGAIN_MIN = 1.0; const val FSRS_HARD_MIN = 15.0; const val FIRST_GOOD_DAYS = 1.0; const val FIRST_EASY_DAYS = 4.0
+    /** A forgotten review card (Again) comes back after 12 hours, like Noji — not in the same session. */
+    const val FSRS_LAPSE_MIN = 12 * 60.0
 
     fun schedule(card: Card, rating: Int, algo: String, cfg: SrsConfig, now: Long = System.currentTimeMillis()): Scheduled {
         val reps = card.reps + 1
@@ -220,7 +222,7 @@ object Srs {
             lapses += 1
             if (algo == Algo.SM2) { ease = max(1.3, ease - 0.2); interval = max(1.0, jsRound(interval * cfg.lapseFactor).toDouble()) }
             else interval = jsRound(Fsrs.intervalFor(s, cfg.desiredRetention)).toDouble().coerceIn(1.0, maxI)
-            if (algo == Algo.FSRS) { status = Status.RELEARNING; step = 0; due = now + (FSRS_AGAIN_MIN * MIN_MS).roundToLong() }
+            if (algo == Algo.FSRS) { status = Status.RELEARNING; step = 0; due = now + (FSRS_LAPSE_MIN * MIN_MS).roundToLong() }
             else if (cfg.relearningSteps.isNotEmpty()) { status = Status.RELEARNING; step = 0; due = now + (relearn[0] * MIN_MS).roundToLong() }
             else { status = Status.REVIEW; due = now + (interval * DAY_MS).roundToLong() }
         } else {

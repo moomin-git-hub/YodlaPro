@@ -26,8 +26,11 @@ export function nextCard(q: StudyQueue, now: number, force = false): Next {
 }
 
 /** After a scheduled answer: keep the card for later today if it is still in learning steps. */
-export function afterAnswer(q: StudyQueue, c: Card, eod = endOfToday()): StudyQueue {
-  if ((c.status === 'learning' || c.status === 'relearning') && c.due <= eod && !c.frozen) return { ...q, learn: [...q.learn.filter((l) => l.id !== c.id), { id: c.id, due: c.due }] };
+/** Longest learning delay that is still waited for inside one study session. */
+export const SESSION_HOLD_MS = 60 * 60_000;
+export function afterAnswer(q: StudyQueue, c: Card, eod = endOfToday(), now = Date.now()): StudyQueue {
+  // only short steps (Again 1m, Hard 15m) come back within this session; a 12h lapse waits for a later session
+  if ((c.status === 'learning' || c.status === 'relearning') && c.due <= Math.min(eod, now + SESSION_HOLD_MS) && !c.frozen) return { ...q, learn: [...q.learn.filter((l) => l.id !== c.id), { id: c.id, due: c.due }] };
   return q;
 }
 

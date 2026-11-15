@@ -18,6 +18,9 @@ sealed interface Next {
     data object Done : Next
 }
 
+/** Longest learning delay that is still waited for inside one study session. */
+const val SESSION_HOLD_MS = 60 * 60_000L
+
 data class StudyQueue(val main: List<QItem> = emptyList(), val learn: List<Learn> = emptyList()) {
     val size get() = main.size + learn.size
     val isEmpty get() = main.isEmpty() && learn.isEmpty()
@@ -38,8 +41,9 @@ data class StudyQueue(val main: List<QItem> = emptyList(), val learn: List<Learn
     fun withNew(items: List<QItem>) = copy(main = items + main)
 
     /** Put a scheduled card back for later today if it is still in learning. */
-    fun afterAnswer(card: Card, endOfDay: Long): StudyQueue =
-        if ((card.status == Status.LEARNING || card.status == Status.RELEARNING) && card.due <= endOfDay && !card.frozen)
+    fun afterAnswer(card: Card, endOfDay: Long, now: Long = System.currentTimeMillis()): StudyQueue =
+        // only short steps (Again 1m, Hard 15m) come back within this session; a 12h lapse waits for a later session
+        if ((card.status == Status.LEARNING || card.status == Status.RELEARNING) && card.due <= minOf(endOfDay, now + SESSION_HOLD_MS) && !card.frozen)
             copy(learn = learn.filter { it.id != card.id } + Learn(card.id, card.due)) else this
 
     /** Practice / fast review: "Again" shows the card again a few cards later. */

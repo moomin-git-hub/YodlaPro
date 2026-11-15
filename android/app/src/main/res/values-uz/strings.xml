@@ -107,6 +107,7 @@
     <string name="connect">Ulash</string>
     <string name="connectAccount">Qurilmalar o\'rtasida sinxron uchun kiring</string>
     <string name="continueGuest">Hisobsiz foydalanish</string>
+    <string name="continueLabel">Davom etish</string>
     <string name="continueStudying">O\'qishni davom ettirish</string>
     <string name="copyToCustom">Shaxsiyga nusxalash uchun bosing</string>
     <string name="cover">Muqova</string>
@@ -122,6 +123,7 @@
     <string name="data">Ma\'lumotlar va zaxira</string>
     <string name="dateAdded">Qo\'shilgan sana</string>
     <string name="day">kun</string>
+    <string name="dayStreak">Kunlik seriya</string>
     <string name="days">kun</string>
     <string name="deckDescPh">Bu desk nima haqida?</string>
     <string name="deckTitlePh">masalan: Ingliz fe\'llari</string>
@@ -344,6 +346,7 @@
     <string name="review">Takror</string>
     <string name="reviewGenerated">%1$s ta kartani tekshiring</string>
     <string name="reviewed">Takrorlandi</string>
+    <string name="reviewedToday">Ajoyib, bugun %1$s ta karta takrorladingiz!</string>
     <string name="reviewsCount">%1$s ta takror</string>
     <string name="save">Saqlash</string>
     <string name="saveAndAdd">Saqlash va yana qo\'shish</string>
@@ -367,7 +370,6 @@
     <string name="serverNotSet">Ko\'rsatilmagan</string>
     <string name="serverOk">Ulandi ✓</string>
     <string name="serverUrl">Server manzili</string>
-    <string name="sessionComplete">Mashg\'ulot tugadi!</string>
     <string name="sessionExpired">Sessiya tugadi. Qayta kiring.</string>
     <string name="settings">Sozlamalar</string>
     <string name="shareToExplore">Kashf etishga e\'lon qilish</string>

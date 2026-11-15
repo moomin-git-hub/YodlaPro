@@ -120,11 +120,19 @@ export async function flush() {
   }
 }
 window.addEventListener('online', () => scheduleFlush());
+// Coming back to the tab (e.g. after studying on the phone): fetch what other devices changed.
+let lastPull = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !user || user.mode !== 'cloud' || !navigator.onLine || Date.now() - lastPull < 30_000) return;
+  lastPull = Date.now();
+  syncNow().catch(() => {});
+});
 
 async function pullCloud() {
   if (!cloudEnabled || !user) return;
   type R = Record<string, unknown>[];
   const r = await api<{ decks: R; flashcards: R; review_logs: R; study_sessions: R; folders: R; user_settings: R; saved_public_decks: R }>('/sync');
+  if (queue.length) return; // a change was made while downloading: keep it, the next sync brings the rest
   const { decks, flashcards: cards, review_logs: reviews, study_sessions: sessions, folders, user_settings: settings, saved_public_decks: saved } = r;
   const s = settings[0] as { data?: Settings } | undefined;
   set({

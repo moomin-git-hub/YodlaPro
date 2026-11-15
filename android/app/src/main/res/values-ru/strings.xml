@@ -107,6 +107,7 @@
     <string name="connect">Подключить</string>
     <string name="connectAccount">Войдите для синхронизации</string>
     <string name="continueGuest">Без аккаунта</string>
+    <string name="continueLabel">Продолжить</string>
     <string name="continueStudying">Продолжить</string>
     <string name="copyToCustom">Нажмите, чтобы скопировать в «Свой»</string>
     <string name="cover">Обложка</string>
@@ -122,6 +123,7 @@
     <string name="data">Данные и резервная копия</string>
     <string name="dateAdded">Дата добавления</string>
     <string name="day">день</string>
+    <string name="dayStreak">Дней подряд</string>
     <string name="days">дн.</string>
     <string name="deckDescPh">О чём эта колода?</string>
     <string name="deckTitlePh">напр. Испанские глаголы</string>
@@ -344,6 +346,7 @@
     <string name="review">Повтор</string>
     <string name="reviewGenerated">Проверьте %1$s карточек</string>
     <string name="reviewed">Повторено</string>
+    <string name="reviewedToday">Отлично, сегодня вы повторили %1$s карточек!</string>
     <string name="reviewsCount">%1$s повт.</string>
     <string name="save">Сохранить</string>
     <string name="saveAndAdd">Сохранить и ещё</string>
@@ -367,7 +370,6 @@
     <string name="serverNotSet">Не указан</string>
     <string name="serverOk">Подключено ✓</string>
     <string name="serverUrl">Адрес сервера</string>
-    <string name="sessionComplete">Сессия завершена!</string>
     <string name="sessionExpired">Сессия истекла. Войдите снова.</string>
     <string name="settings">Настройки</string>
     <string name="shareToExplore">Опубликовать в Обзоре</string>

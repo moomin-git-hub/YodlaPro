@@ -73,6 +73,14 @@ class StudyFlowTest {
         assertEquals(Status.REVIEW, u.status); assertEquals(1.0, u.interval, 0.0)
         settle { d -> d.cards.first { it.id == c.id }.status == Status.REVIEW }
         assertTrue(repo.buildQueue(deck.id, false).isEmpty)
+        // a day later the word is forgotten: Again → back in 12h (Noji), not held in this session
+        val later = u.due + 60_000
+        val lapse = Srs.schedule(u, 1, Algo.FSRS, cfg, later)
+        assertEquals(Status.RELEARNING, lapse.status); assertEquals(later + 720 * 60_000L, lapse.due)
+        val lapsed = u.copy(status = lapse.status, due = lapse.due)
+        assertTrue(StudyQueue().afterAnswer(lapsed, Srs.endOfToday(later), later).learn.isEmpty())
+        // Again on a learning card (1m) stays in the session
+        assertEquals(1, StudyQueue().afterAnswer(lapsed.copy(due = later + 60_000), Long.MAX_VALUE, later).learn.size)
     }
 
     @Test fun hardAndGoodTimesAreRespected() = runBlocking {
