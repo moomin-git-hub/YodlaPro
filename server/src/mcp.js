@@ -6,12 +6,13 @@ import { createHash, randomBytes } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { q } from './db.js';
 import { requireAuth } from './auth.js';
 import { rateLimit, wrap } from './util.js';
 import {
   deckList, deckTree, deckCards, createDeck, addCards, deleteNotes, editNote, searchCards, nextCard, review, dueCount,
-  todayData, reportData, updateSettings, settingsOf, labels, presetFor, isUuid,
+  todayData, reportData, updateSettings, settingsOf, labels, presetFor, isUuid, toCard,
 } from './cards.js';
 
 const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://yodla.onrender.com').replace(/\/$/, '');
@@ -56,7 +57,8 @@ async function resolveDeck(userId, deck, create) {
   return create ? createDeck(userId, name) : null;
 }
 
-function buildServer(userId) {
+/** reg (optional) collects {name, description, shape, run} so the same tools can be served as a plain REST API (ChatGPT Actions). */
+function buildServer(userId, reg) {
   const server = new McpServer(
     { name: 'yodla', version: '1.0.0' },
     {
@@ -67,6 +69,11 @@ function buildServer(userId) {
         + 'and get_stats for progress. Changes appear in the Yodla apps after their next sync.',
     },
   );
+
+  if (reg) {
+    const orig = server.registerTool.bind(server);
+    server.registerTool = (name, cfg, run) => { reg.push({ name, description: cfg.description, shape: cfg.inputSchema ?? {}, run }); return orig(name, cfg, run); };
+  }
 
   server.registerTool('list_decks', {
     title: 'List decks', description: 'All of the user\'s decks (with subdecks), card counts and how many reviews are due today.',
@@ -177,6 +184,26 @@ function buildServer(userId) {
     inputSchema: { value: z.number().int().min(0).max(500) },
   }, async ({ value }) => { await updateSettings(userId, { newPerDay: value }); return out({ new_words_per_day: value }); });
 
+  // `search` + `fetch`: the two tools ChatGPT (deep research / company knowledge) expects from a connector.
+  server.registerTool('search', {
+    title: 'Search', description: 'Searches the user\'s Yodla cards. Returns a list of results with id, title and url; use fetch to read a card.',
+    inputSchema: { query: z.string().min(1).max(100) }, annotations: { readOnlyHint: true },
+  }, async ({ query }) => {
+    const rows = await searchCards(userId, query, 20);
+    return { content: [{ type: 'text', text: JSON.stringify({ results: rows.map((c) => ({ id: c.id, title: `${plain(c.front)} — ${plain(c.back)}`.slice(0, 120), url: `${PUBLIC_URL}/#card-${c.id}` })) }) }] };
+  });
+  server.registerTool('fetch', {
+    title: 'Fetch card', description: 'Returns the full text of one Yodla card by id (from search).',
+    inputSchema: { id: z.string().uuid() }, annotations: { readOnlyHint: true },
+  }, async ({ id }) => {
+    const { rows: [c] } = await q('select f.*, d.title deck_title from flashcards f join decks d on d.id=f.deck_id where f.id=$1 and f.user_id=$2', [id, userId]);
+    if (!c) return fail('Card not found.');
+    const card = { ...toCard(c), deckTitle: c.deck_title };
+    const o = cardOut(card);
+    const text = `Question: ${o.question}\nAnswer: ${o.answer}${o.example ? `\nExample: ${o.example}` : ''}${o.explanation ? `\nExplanation: ${o.explanation}` : ''}`;
+    return { content: [{ type: 'text', text: JSON.stringify({ id, title: o.question, text, url: `${PUBLIC_URL}/#card-${id}`, metadata: { deck: o.deck, status: o.status } }) }] };
+  });
+
   return server;
 }
 
@@ -196,6 +223,37 @@ async function handle(req, res) {
 }
 mcpRouter.all('/:token', limiter, wrap(handle));
 mcpRouter.all('/', limiter, wrap(handle));
+
+// ---------------- plain REST + OpenAPI (ChatGPT custom GPT "Actions", Gemini function calling, any HTTP client) ----------------
+export const connectRouter = Router();
+const REST_SKIP = new Set(['search', 'fetch']);
+const tools = () => { const reg = []; buildServer(null, reg); return reg.filter((t) => !REST_SKIP.has(t.name)); };
+connectRouter.get('/:token/openapi.json', limiter, wrap(async (req, res) => {
+  if (!(await userOfToken(req.params.token))) return res.status(401).json({ error: 'Invalid or revoked Yodla link.' });
+  const paths = {};
+  for (const t of tools()) {
+    const schema = zodToJsonSchema(z.object(t.shape), { target: 'openApi3', $refStrategy: 'none' });
+    paths[`/api/connect/${req.params.token}/${t.name}`] = { post: {
+      operationId: t.name, summary: String(t.description).slice(0, 290),
+      requestBody: { required: true, content: { 'application/json': { schema } } },
+      responses: { 200: { description: 'Result as JSON', content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } },
+    } };
+  }
+  res.json({ openapi: '3.1.0', info: { title: 'Yodla', version: '1.0.0', description: 'The user\'s Yodla flashcards: add cards (with example and explanation), search, quiz, stats.' }, servers: [{ url: PUBLIC_URL }], paths });
+}));
+connectRouter.post('/:token/:tool', limiter, wrap(async (req, res) => {
+  const userId = await userOfToken(req.params.token);
+  if (!userId) return res.status(401).json({ error: 'Invalid or revoked Yodla link.' });
+  const reg = []; buildServer(userId, reg);
+  const t = reg.find((x) => x.name === req.params.tool && !REST_SKIP.has(x.name));
+  if (!t) return res.status(404).json({ error: 'Unknown tool.' });
+  const parsed = z.object(t.shape).safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
+  const r = await t.run(parsed.data);
+  const text = r.content?.[0]?.text ?? '';
+  if (r.isError) return res.status(400).json({ error: text });
+  try { res.json(JSON.parse(text)); } catch { res.json({ result: text }); }
+}));
 
 /** App side: create / check / revoke the personal connector link. */
 export const claudeRouter = Router();

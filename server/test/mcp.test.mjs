@@ -40,6 +40,22 @@ console.log('✓ list/search/update/deck cards/stats/settings/subdeck/delete');
 const sync = await j('/api/sync', { headers: auth });
 assert.ok(sync.body.flashcards.some((c) => c.front.startsWith('The {{c1::') && c.card_type === 'cloze'));
 assert.equal(sync.body.user_settings[0].data.newPerDay, 30); console.log('✓ app sync sees the changes');
+// ChatGPT: search + fetch tools
+r = await call('add_cards', { deck: 'IELTS words', cards: [{ question: 'ubiquitous', answer: 'hamma joyda bor', example: 'Phones are ubiquitous.', explanation: 'formal' }] });
+r = await call('search', { query: 'ubiquitous' }); assert.equal(r.data.results.length, 1); assert.match(r.data.results[0].title, /ubiquitous/);
+const fr = await client.callTool({ name: 'fetch', arguments: { id: r.data.results[0].id } });
+assert.match(JSON.parse(fr.content[0].text).text, /Example: Phones are ubiquitous\./); console.log('✓ ChatGPT search + fetch');
+// plain REST + OpenAPI (custom GPT Actions)
+const base2 = new URL(url).pathname.replace('/mcp/', '/api/connect/');
+const spec = await j(base2 + '/openapi.json'); assert.equal(spec.status, 200);
+assert.ok(spec.body.paths[base2 + '/add_cards'].post.requestBody.content['application/json'].schema.properties.cards);
+assert.ok(!spec.body.paths[base2 + '/search']); assert.equal(Object.keys(spec.body.paths).length, 11);
+let rr = await j(base2 + '/add_cards', { method: 'POST', body: JSON.stringify({ deck: 'REST', cards: [{ question: 'rest', answer: 'dam', example: 'Take a rest.' }] }) });
+assert.equal(rr.status, 200); assert.equal(rr.body.added, 1);
+rr = await j(base2 + '/add_cards', { method: 'POST', body: JSON.stringify({ cards: [] }) }); assert.equal(rr.status, 400);
+rr = await j(base2 + '/get_stats', { method: 'POST', body: '{}' }); assert.equal(rr.status, 200); assert.ok(rr.body.today);
+rr = await j(base2 + '/nope', { method: 'POST', body: '{}' }); assert.equal(rr.status, 404);
+console.log('✓ REST + OpenAPI schema (11 operations)');
 // revoke
 await client.close();
 await j('/api/claude', { method: 'DELETE', headers: auth });
@@ -47,5 +63,6 @@ const bad = await fetch(base + path, { method: 'POST', headers: { 'content-type'
 assert.equal(bad.status, 401); console.log('✓ revoked link → 401');
 const bad2 = await fetch(base + '/mcp/yod_' + 'a'.repeat(32), { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 assert.equal(bad2.status, 401);
+assert.equal((await j(base2 + '/openapi.json')).status, 401); console.log('✓ revoked link → REST 401');
 await j('/api/auth/me', { method: 'DELETE', headers: auth });
 console.log('\nMCP OK');

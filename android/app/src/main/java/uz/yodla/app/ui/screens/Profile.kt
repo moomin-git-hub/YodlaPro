@@ -350,7 +350,7 @@ private fun ClaudeCard() {
             Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFF97316).copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.AutoAwesome, null, tint = Color(0xFFF97316)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Claude", fontWeight = FontWeight.Bold)
+                Text("Claude · ChatGPT · Gemini", fontWeight = FontWeight.Bold)
                 Text(stringResource(if (a) R.string.claudeActive else R.string.claudeDesc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
             }
             if (url.isEmpty()) {
@@ -363,6 +363,11 @@ private fun ClaudeCard() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(url, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), maxLines = 2)
                 IconButton({ copy(url) }) { Icon(Icons.Rounded.ContentCopy, stringResource(R.string.claudeCopied)) }
+            }
+            val schema = url.replace("/mcp/", "/api/connect/") + "/openapi.json"
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(schema, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), maxLines = 2)
+                IconButton({ copy(schema) }) { Icon(Icons.Rounded.ContentCopy, stringResource(R.string.claudeCopied)) }
             }
         }
         if (url.isNotEmpty() || !a) { Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.claudeHow), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }

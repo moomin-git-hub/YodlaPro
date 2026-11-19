@@ -16,7 +16,7 @@ import { telegramRouter, miniAppAuth, setupTelegram, telegramEnabled } from './t
 import { buildReport } from './reports.js';
 import { requireAuth } from './auth.js';
 import { wrap } from './util.js';
-import { mcpRouter, claudeRouter } from './mcp.js';
+import { mcpRouter, claudeRouter, connectRouter } from './mcp.js';
 
 const app = express();
 app.set('trust proxy', 1); // Render sits behind a proxy
@@ -44,6 +44,7 @@ app.get('/api/reports/:fmt', requireAuth, wrap(async (req, res) => {
   const r = await buildReport(req.userId, req.params.fmt, req.query.period === 'month' ? 'month' : 'week');
   res.set({ 'Content-Type': r.mime, 'Content-Disposition': `attachment; filename="${r.name}"`, 'Cache-Control': 'no-store' }).send(r.buffer);
 }));
+app.use('/api/connect', cors({ origin: true }), connectRouter); // same tools as plain REST + OpenAPI (ChatGPT Actions)
 app.use('/api/claude', claudeRouter); // personal Claude connector link
 app.use('/api/sync', syncRouter);
 app.use('/api/ai', aiRouter);

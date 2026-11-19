@@ -443,12 +443,12 @@
     <string name="wipe">Удалить все мои данные</string>
     <string name="wrongCode">Неверный email или код</string>
     <string name="wrongCredentials">Неверный email или пароль</string>
-    <string name="claudeDesc">Карточки, тесты и статистика из любого чата Claude</string>
+    <string name="claudeDesc">Карточки, тесты и статистика из Claude, ChatGPT или Gemini</string>
     <string name="claudeActive">Подключено к Claude</string>
     <string name="claudeCreate">Создать ссылку</string>
     <string name="claudeNew">Новая ссылка</string>
     <string name="claudeRevoke">Отозвать ссылку</string>
     <string name="claudeCopied">Ссылка скопирована</string>
-    <string name="claudeHow">В Claude: Settings → Connectors → Add custom connector → вставьте ссылку. Затем просто попросите: «добавь эти слова в мою колоду Yodla». Никому не давайте ссылку — с ней можно менять ваши карточки.</string>
+    <string name="claudeHow">Claude: Settings → Connectors → Add custom connector → вставьте первую ссылку.\nChatGPT: Settings → Apps → Advanced → Developer mode → Create → первая ссылка, аутентификация «None». Или в своём GPT: Actions → Import from URL → вторая ссылка, аутентификация «None».\nGemini: Gemini CLI (~/.gemini/settings.json → mcpServers → \"httpUrl\": первая ссылка) или приложение Gemini → Settings → Connected apps → Custom app.\nЗатем просто попросите: «добавь эти слова в мою колоду Yodla». Никому не давайте ссылки — с ними можно менять ваши карточки.</string>
     <string name="claudeNewWarn">Старая ссылка перестанет работать. Продолжить?</string>
 </resources>

@@ -444,12 +444,12 @@
     <string name="wipe">Delete all my data</string>
     <string name="wrongCode">Wrong email or recovery code</string>
     <string name="wrongCredentials">Wrong email or password</string>
-    <string name="claudeDesc">Add cards, quiz and stats from any Claude chat</string>
+    <string name="claudeDesc">Add cards, quiz and stats from Claude, ChatGPT or Gemini</string>
     <string name="claudeActive">Connected to Claude</string>
     <string name="claudeCreate">Create link</string>
     <string name="claudeNew">New link</string>
     <string name="claudeRevoke">Revoke link</string>
     <string name="claudeCopied">Link copied</string>
-    <string name="claudeHow">In Claude: Settings → Connectors → Add custom connector → paste this link. Then just ask: “add these words to my Yodla deck”. Keep the link private — anyone with it can edit your cards.</string>
+    <string name="claudeHow">Claude: Settings → Connectors → Add custom connector → paste the first link.\nChatGPT: Settings → Apps → Advanced → Developer mode → Create → paste the first link, authentication “None”. Or in a custom GPT → Actions → Import from URL → paste the second link, authentication “None”.\nGemini: Gemini CLI (~/.gemini/settings.json → mcpServers → \"httpUrl\": first link) or Gemini app → Settings → Connected apps → Custom app.\nThen just ask: “add these words to my Yodla deck”. Keep the links private — anyone with them can edit your cards.</string>
     <string name="claudeNewWarn">The old link will stop working. Continue?</string>
 </resources>

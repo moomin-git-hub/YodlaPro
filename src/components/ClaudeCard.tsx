@@ -28,7 +28,7 @@ export function ClaudeCard() {
       <div className="flex items-center gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-500/15 text-orange-500"><Sparkles size={20} /></span>
         <div className="min-w-0 flex-1">
-          <p className="font-bold">Claude</p>
+          <p className="font-bold">Claude · ChatGPT · Gemini</p>
           <p className="truncate text-xs opacity-60">{st.active && st.createdAt ? t('claudeActive', { n: new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(st.createdAt) }) : t('claudeDesc')}</p>
         </div>
         {st.active && !url
@@ -41,7 +41,11 @@ export function ClaudeCard() {
             <input readOnly className="input font-mono text-xs" value={url} onFocus={(e) => e.target.select()} aria-label="Claude connector URL" />
             <Button size="sm" variant="soft" icon={<Copy size={14} />} onClick={() => copy(url)}>{''}</Button>
           </div>
-          <p className="text-xs leading-relaxed opacity-60">{t('claudeHow')}</p>
+          <div className="flex gap-2">
+            <input readOnly className="input font-mono text-xs" value={url.replace('/mcp/', '/api/connect/') + '/openapi.json'} onFocus={(e) => e.target.select()} aria-label="OpenAPI schema URL (ChatGPT Actions)" />
+            <Button size="sm" variant="soft" icon={<Copy size={14} />} onClick={() => copy(url.replace('/mcp/', '/api/connect/') + '/openapi.json')}>{''}</Button>
+          </div>
+          <p className="whitespace-pre-line text-xs leading-relaxed opacity-60">{t('claudeHow')}</p>
         </div>
       )}
       {st.active && (
@@ -49,7 +53,7 @@ export function ClaudeCard() {
           <Trash2 size={13} />{t('claudeRevoke')}
         </button>
       )}
-      {!url && !st.active && <p className="text-xs leading-relaxed opacity-55">{t('claudeHow')}</p>}
+      {!url && !st.active && <p className="whitespace-pre-line text-xs leading-relaxed opacity-55">{t('claudeHow')}</p>}
     </section>
   );
 }
