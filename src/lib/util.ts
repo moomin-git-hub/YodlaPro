@@ -117,3 +117,11 @@ export function parseDelimited(text: string): string[][] {
 }
 
 export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim());
+
+/** True when a key event is typed into a text field (input, textarea, select or a rich contenteditable editor). */
+export function isTyping(e: Event) {
+  const el = e.target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable || !!el.closest?.('[contenteditable=""],[contenteditable="true"]');
+}

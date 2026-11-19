@@ -3,8 +3,8 @@ import type { Card, Deck, Folder, ReviewLog, Settings, StudySession, UserData, D
 import { kvGet, kvSet, uid, ls } from './util';
 import { api, cloudEnabled, ApiError } from './api';
 import type { AuthUser } from './auth';
+import { cleanRich, clozeIndices } from './rich';
 import { newCardDefaults, schedule, PRESETS, DEFAULT_CONFIG, type Algorithm, type SrsConfig } from './srs';
-import { clozeIndices } from './rich';
 
 export const defaultSettings = (): Settings => ({
   dailyGoal: 20, newPerDay: 20, reminderEnabled: false, reminderTime: '20:00',
@@ -70,8 +70,11 @@ function fromRow<T>(r: Record<string, unknown>): T {
   return o as T;
 }
 
+/** Bumped on every local change; a download that started before a change must not overwrite it. */
+let localEdits = 0;
 function enqueue(ops: Op[]) {
   if (user?.mode !== 'cloud') return;
+  localEdits++;
   queue.push(...ops);
   kvSet('queue:' + user.id, queue);
   syncState.pending = queue.length;
@@ -121,12 +124,22 @@ export async function flush() {
   }
 }
 window.addEventListener('online', () => scheduleFlush());
+// Coming back to the tab (e.g. after studying on the phone): fetch what other devices changed.
+let lastPull = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !user || user.mode !== 'cloud' || !navigator.onLine || Date.now() - lastPull < 30_000) return;
+  lastPull = Date.now();
+  syncNow().catch(() => {});
+});
 
 async function pullCloud() {
   if (!cloudEnabled || !user) return;
   type R = Record<string, unknown>[];
+  const edits0 = localEdits;
   const r = await api<{ decks: R; flashcards: R; review_logs: R; study_sessions: R; folders: R; user_settings: R; saved_public_decks: R }>('/sync');
-  if (queue.length > 0) return; // local changes arrived meanwhile; next sync will pull
+  // a change was made while downloading (even if already uploaded meanwhile): this snapshot is older than the
+  // local state, so keep local and let the next sync bring the rest
+  if (queue.length || localEdits !== edits0) return;
   const { decks, flashcards: cards, review_logs: reviews, study_sessions: sessions, folders, user_settings: settings, saved_public_decks: saved } = r;
   const s = settings[0] as { data?: Settings } | undefined;
   set({
@@ -142,10 +155,8 @@ async function pullCloud() {
 }
 
 export async function loadUser(u: AuthUser | null) {
-  clearTimeout(saveTimer);
-  clearTimeout(flushTimer);
   user = u; ready = false;
-  if (!u) { state = empty(); queue = []; syncState.pending = 0; syncState.error = ''; ready = true; emit(); return; }
+  if (!u) { state = empty(); ready = true; emit(); return; }
   const saved = await kvGet<UserData>('data:' + u.id);
   state = saved ? { ...empty(), ...saved, settings: { ...defaultSettings(), ...saved.settings } } : empty();
   queue = (await kvGet<Op[]>('queue:' + u.id)) ?? [];
@@ -188,27 +199,20 @@ export function deleteDeck(id: string) {
   return n;
 }
 
-export function addCards(deckId: string, drafts: (DraftCard & { image?: string; cardType?: string })[]): Card[] {
+export function addCards(deckId: string, drafts: (DraftCard & { image?: string })[]): Card[] {
   const t = now();
   const cards: Card[] = [];
   drafts.forEach((d, i) => {
-    const noteId = uid();
-    const cands = clozeIndices(d.front);
-    if ((d.cardType === 'cloze' || cands.length > 0) && cands.length > 0) {
-      cands.forEach((n, k) => {
-        cards.push({
-          id: uid(), deckId, noteId, cardType: 'cloze', extra: JSON.stringify({ c: n }),
-          front: d.front.trim(), back: (d.back ?? '').trim(), example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(),
-          image: d.image ?? '', difficult: false, bookmarked: false, ...newCardDefaults(), due: t + i + k, createdAt: t + i + k, updatedAt: t,
-        });
-      });
+    const front = cleanRich(d.front), back = cleanRich(d.back ?? '');
+    const base = { deckId, front, back, example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(), image: d.image ?? '', difficult: false, bookmarked: false };
+    const cz = clozeIndices(front);
+    if (cz.length) {
+      // a {{c1::…}} note becomes one card per cloze number (same as Android)
+      const noteId = uid();
+      cz.forEach((n, k) => cards.push({ ...base, ...newCardDefaults(), id: uid(), noteId, cardType: 'cloze', extra: JSON.stringify({ c: n }), due: t + i, createdAt: t + i + k / 100, updatedAt: t }));
     } else {
       const id = uid();
-      cards.push({
-        id, deckId, noteId: id, cardType: 'basic',
-        front: d.front.trim(), back: (d.back ?? '').trim(), example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(),
-        image: d.image ?? '', difficult: false, bookmarked: false, ...newCardDefaults(), due: t + i, createdAt: t + i, updatedAt: t,
-      });
+      cards.push({ ...base, ...newCardDefaults(), id, noteId: id, cardType: 'basic', due: t + i, createdAt: t + i, updatedAt: t });
     }
   });
   set({ cards: [...state.cards, ...cards] }, cards.map((c) => ({ t: 'up', table: 'flashcards', row: toRow(c) })));
@@ -241,52 +245,47 @@ export function resetProgress(ids: string[]) {
 export const algoFor = (deck?: Deck): Algorithm => deck?.algorithm ?? 'fsrs';
 export function presetFor(deck?: Deck): SrsConfig {
   const id = deck?.preset ?? state.settings.defaultPreset ?? 'standard';
-  if (id === 'custom') return { ...DEFAULT_CONFIG, ...(state.settings.customPreset ?? {}) };
-  return PRESETS[id as keyof typeof PRESETS] ?? DEFAULT_CONFIG;
+  const base = id === 'custom' ? { ...DEFAULT_CONFIG, ...(state.settings.customPreset ?? {}) } : PRESETS[id as keyof typeof PRESETS] ?? DEFAULT_CONFIG;
+  return { ...base, newPerDay: state.settings.newPerDay }; // one global, user-adjustable "new words per day"
 }
 
 /** All cards of the same note (forward card + its reverse sibling, cloze siblings…). */
 export const noteOf = (c: Card) => state.cards.filter((x) => (x.noteId ?? x.id) === (c.noteId ?? c.id));
 export const hasReverse = (c: Card) => noteOf(c).some((x) => x.cardType === 'reverse');
 
-/** Saves a note's content to all its sibling cards (basic/reverse, cloze, or occlusion). */
+/** Saves a basic note's content to all its cards and adds/removes the reverse sibling. */
 export function saveBasicNote(card: Card, patch: Partial<Card>, reversed: boolean) {
   const t = now(), noteId = card.noteId ?? card.id;
   const sib = noteOf(card);
   const ops: Op[] = [];
+  if (patch.front !== undefined) patch = { ...patch, front: cleanRich(patch.front) };
+  if (patch.back !== undefined) patch = { ...patch, back: cleanRich(patch.back) };
   const content = { front: patch.front, back: patch.back, example: patch.example, explanation: patch.explanation, image: patch.image, deckId: patch.deckId } as Partial<Card>;
   Object.keys(content).forEach((k) => content[k as keyof Card] === undefined && delete content[k as keyof Card]);
-  const newFront = content.front ?? card.front;
-  const cands = clozeIndices(newFront);
-  if (card.cardType === 'cloze' || ((!card.cardType || card.cardType === 'basic') && cands.length > 0)) {
-    const keep: Card[] = [];
-    cands.forEach((idx, i) => {
-      const ex = sib.find((x) => {
-        if (x.cardType !== 'cloze') return false;
-        try { return JSON.parse(x.extra || '{}').c === idx; } catch { return false; }
-      }) ?? (i === 0 ? sib[0] : undefined);
-      const baseCard = ex ?? { ...card, ...newCardDefaults(), id: uid(), createdAt: t + i };
-      const n: Card = {
-        ...baseCard, ...content, ...(baseCard.id === card.id ? patch : {}),
-        noteId, cardType: 'cloze', extra: JSON.stringify({ c: idx }), updatedAt: t,
-      };
-      keep.push(n);
-      ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
+  const flags = { difficult: patch.difficult, bookmarked: patch.bookmarked, frozen: patch.frozen } as Partial<Card>;
+  Object.keys(flags).forEach((k) => flags[k as keyof Card] === undefined && delete flags[k as keyof Card]);
+
+  if (card.cardType === 'cloze') {
+    // one card per {{cN::…}}: keep progress of numbers that stay, add new numbers, drop removed ones
+    const front = content.front ?? card.front;
+    const keep: Card[] = clozeIndices(front).map((n, k) => {
+      const ex = sib.find((x) => x.cardType === 'cloze' && clozeNo(x) === n);
+      return { ...(ex ?? { ...card, ...newCardDefaults(), id: uid(), createdAt: t + k / 100 }), ...content, ...flags, noteId, cardType: 'cloze', extra: JSON.stringify({ c: n }), updatedAt: t };
     });
-    const keepIds = new Set(keep.map((k) => k.id));
-    const removed = sib.filter((x) => !keepIds.has(x.id));
-    removed.forEach((r) => ops.push({ t: 'del', table: 'flashcards', id: r.id }));
-    const sibIds = new Set(sib.map((x) => x.id));
+    const keepIds = new Set(keep.map((k) => k.id)), sibIds = new Set(sib.map((x) => x.id));
+    sib.filter((x) => !keepIds.has(x.id)).forEach((x) => ops.push({ t: 'del', table: 'flashcards', id: x.id }));
+    keep.forEach((k) => ops.push({ t: 'up', table: 'flashcards', row: toRow(k) }));
     set({ cards: [...state.cards.filter((c) => !sibIds.has(c.id)), ...keep] }, ops);
     return;
   }
+
   let cards = state.cards.map((c) => {
     if (!sib.includes(c)) return c;
-    const n: Card = { ...c, ...content, ...(c.id === card.id ? patch : {}), noteId, updatedAt: t };
+    const n: Card = { ...c, ...content, ...flags, ...(c.id === card.id ? patch : {}), noteId, updatedAt: t };
     ops.push({ t: 'up', table: 'flashcards', row: toRow(n) });
     return n;
   });
-  if (!card.cardType || card.cardType === 'basic' || card.cardType === 'reverse') {
+  if (card.cardType !== 'occlusion') {
     const rev = sib.find((x) => x.cardType === 'reverse');
     if (reversed && !rev) {
       const base = cards.find((c) => c.id === card.id)!;
@@ -297,6 +296,22 @@ export function saveBasicNote(card: Card, patch: Partial<Card>, reversed: boolea
     }
   }
   set({ cards }, ops);
+}
+const clozeNo = (c: Card) => { try { return Number(JSON.parse(c.extra || '{}').c) || 1; } catch { return 1; } };
+
+/**
+ * One entry per note for export/sharing: the reverse card and the other cloze cards of a note are the same
+ * content (they would be duplicated), and image-occlusion masks can't be expressed as question/answer text.
+ */
+export function notesOnly<T extends { id: string; noteId?: string; cardType?: string }>(cards: T[]): T[] {
+  const seen = new Set<string>();
+  return cards.filter((c) => {
+    if (c.cardType === 'occlusion' || c.cardType === 'reverse') return false;
+    const k = c.noteId || c.id;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 /** Copies a note (all its cards) with fresh progress. */
@@ -377,50 +392,59 @@ export function toggleSavedPublic(pid: string) {
 export function exportBackup() {
   return JSON.stringify({ app: 'yodla', version: 1, exportedAt: new Date().toISOString(), data: state }, null, 2);
 }
-function sortDecksParentFirst(decks: Deck[]): Deck[] {
-  const byId = new Map(decks.map((d) => [d.id, d]));
-  const visited = new Set<string>();
-  const out: Deck[] = [];
-  const visit = (d: Deck) => {
-    if (visited.has(d.id)) return;
-    visited.add(d.id);
-    if (d.parentId && byId.has(d.parentId) && d.parentId !== d.id) visit(byId.get(d.parentId)!);
-    out.push(d);
-  };
-  decks.forEach(visit);
-  return out;
-}
-
+/** Backup rows may come from Android (ISO date strings, snake_case) or the web (epoch ms, camelCase). */
 function normRecord<T>(raw: unknown): T {
   const o: Record<string, unknown> = {};
   for (const [k, v] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    if (k === 'user_id' || k === 'userId') continue;
     const ck = k === 'type' ? 'cardType' : camel(k);
-    o[ck] = TIME.has(ck) && typeof v === 'string' ? Date.parse(v) : v;
+    o[ck] = TIME.has(ck) && typeof v === 'string' ? (Date.parse(v) || 0) : v;
   }
   return o as T;
+}
+/** Parents before subdecks, so the server never sees a subdeck whose parent doesn't exist yet. */
+function parentFirst(decks: Deck[]): Deck[] {
+  const byId = new Map(decks.map((d) => [d.id, d])), seen = new Set<string>(), out: Deck[] = [];
+  const visit = (d: Deck, depth = 0) => {
+    if (seen.has(d.id)) return;
+    seen.add(d.id);
+    const p = d.parentId ? byId.get(d.parentId) : undefined;
+    if (p && depth < 50) visit(p, depth + 1);
+    out.push(d);
+  };
+  decks.forEach((d) => visit(d));
+  return out;
+}
+
+/** Only known settings keys with the same value type (an Android backup has a few extra/different fields). */
+function mergeSettings(incoming: unknown): Settings {
+  const out = { ...state.settings } as Record<string, unknown>;
+  if (incoming && typeof incoming === 'object') for (const [k, v] of Object.entries(incoming)) {
+    if (k in out && v !== null && typeof v === typeof out[k]) out[k] = v;
+  }
+  return out as unknown as Settings;
 }
 
 export function importBackup(json: string) {
   const parsed = JSON.parse(json);
   const raw = parsed?.data ?? parsed;
   if (!Array.isArray(raw?.decks) || !Array.isArray(raw?.cards)) throw new Error('invalid');
-  const decks = sortDecksParentFirst(raw.decks.map((x: unknown) => normRecord<Deck>(x)));
-  const cards = raw.cards.map((x: unknown) => { const c = normRecord<Card>(x); return { ...c, noteId: c.noteId || c.id }; });
-  const reviews = (raw.reviews ?? []).map((x: unknown) => normRecord<ReviewLog>(x));
-  const sessions = (raw.sessions ?? []).map((x: unknown) => normRecord<StudySession>(x));
-  const folders = (raw.folders ?? []).map((x: unknown) => normRecord<Folder>(x));
+  const arr = <T,>(a: unknown): T[] => (Array.isArray(a) ? a.map((x) => normRecord<T>(x)) : []);
+  const decks = parentFirst(arr<Deck>(raw.decks));
+  const cards = arr<Card>(raw.cards).map((c) => ({ ...c, noteId: c.noteId || c.id }));
+  const reviews = arr<ReviewLog>(raw.reviews), sessions = arr<StudySession>(raw.sessions), folders = arr<Folder>(raw.folders);
   const keep = <T extends { id: string }>(a: T[], b: T[]): T[] => { const ids = new Set(a.map((x) => x.id)); return [...a, ...b.filter((x) => !ids.has(x.id))]; };
   const next: UserData = {
     decks: keep(decks, state.decks), cards: keep(cards, state.cards), reviews: keep(reviews, state.reviews),
     sessions: keep(sessions, state.sessions), folders: keep(folders, state.folders),
-    savedPublic: Array.from(new Set([...(raw.savedPublic ?? []), ...state.savedPublic])), settings: { ...state.settings, ...(raw.settings ?? {}) },
+    savedPublic: Array.from(new Set([...(Array.isArray(raw.savedPublic) ? raw.savedPublic : []), ...state.savedPublic])), settings: mergeSettings(raw.settings),
   };
   const ops: Op[] = [
-    ...folders.map((f: Folder) => ({ t: 'up' as const, table: 'folders' as const, row: toRow(f) })),
-    ...decks.map((x: Deck) => ({ t: 'up' as const, table: 'decks' as const, row: toRow(x) })),
-    ...cards.map((x: Card) => ({ t: 'up' as const, table: 'flashcards' as const, row: toRow(x) })),
-    ...reviews.map((x: ReviewLog) => ({ t: 'up' as const, table: 'review_logs' as const, row: toRow(x) })),
-    ...sessions.map((x: StudySession) => ({ t: 'up' as const, table: 'study_sessions' as const, row: toRow(x) })),
+    ...folders.map((f) => ({ t: 'up' as const, table: 'folders' as const, row: toRow(f) })),
+    ...decks.map((x) => ({ t: 'up' as const, table: 'decks' as const, row: toRow(x) })),
+    ...cards.map((x) => ({ t: 'up' as const, table: 'flashcards' as const, row: toRow(x) })),
+    ...reviews.map((x) => ({ t: 'up' as const, table: 'review_logs' as const, row: toRow(x) })),
+    ...sessions.map((x) => ({ t: 'up' as const, table: 'study_sessions' as const, row: toRow(x) })),
   ];
   set(next, ops);
   return { decks: decks.length, cards: cards.length };
@@ -428,11 +452,6 @@ export function importBackup(json: string) {
 
 export function wipeData() {
   const ops: Op[] = state.decks.map((d) => ({ t: 'del', table: 'decks', id: d.id }));
-  ops.push(
-    ...state.reviews.map((r) => ({ t: 'del' as const, table: 'review_logs' as const, id: r.id })),
-    ...state.sessions.map((s) => ({ t: 'del' as const, table: 'study_sessions' as const, id: s.id })),
-    ...state.folders.map((f) => ({ t: 'del' as const, table: 'folders' as const, id: f.id })),
-    ...state.savedPublic.map((id) => ({ t: 'del' as const, table: 'saved_public_decks' as const, id })),
-  );
+  ops.push(...state.reviews.map((r) => ({ t: 'del' as const, table: 'review_logs' as const, id: r.id })), ...state.sessions.map((s) => ({ t: 'del' as const, table: 'study_sessions' as const, id: s.id })), ...state.folders.map((f) => ({ t: 'del' as const, table: 'folders' as const, id: f.id })));
   set({ ...empty(), settings: { ...state.settings, onboarded: true } }, ops);
 }

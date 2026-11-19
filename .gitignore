@@ -2,11 +2,12 @@ node_modules
 dist
 dist-single
 .env
+server/node_modules
 android/.gradle
+android/.kotlin
 android/build
 android/app/build
 android/local.properties
-android/*.jks
 android/keystore.properties
-android/.kotlin
-server/node_modules
+*.jks
+*.keystore

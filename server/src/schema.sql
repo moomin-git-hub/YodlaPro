@@ -169,3 +169,26 @@ alter table decks add column if not exists algorithm text not null default 'fsrs
 alter table decks add column if not exists offline boolean not null default false;
 alter table flashcards add column if not exists stability real not null default 0;
 alter table flashcards add column if not exists difficulty real not null default 0;
+
+-- v5: Telegram bot (@yodlaPro_bot): linked chats, link codes, bot preferences and state
+create table if not exists telegram_links (
+  user_id uuid primary key references users(id) on delete cascade,
+  chat_id bigint not null unique,
+  tg_name text not null default '',
+  prefs jsonb not null default '{}'::jsonb,   -- reminders, streakSaver, weeklyReport, leaderboard, goal, deckId
+  state jsonb not null default '{}'::jsonb,   -- pending AI cards, sent-notification marks
+  created_at timestamptz not null default now()
+);
+create table if not exists telegram_codes (
+  code text primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  expires_at timestamptz not null
+);
+
+-- v6: personal Claude connector (remote MCP) tokens; only the SHA-256 hash is stored
+create table if not exists api_tokens (
+  user_id uuid primary key references users(id) on delete cascade,
+  token_hash text not null unique,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz
+);

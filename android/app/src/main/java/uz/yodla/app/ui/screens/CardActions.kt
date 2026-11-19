@@ -67,8 +67,10 @@ fun CardActionsSheet(card: Card, nav: NavHostController, onDismiss: () -> Unit, 
                     }
                     Action(Icons.Rounded.History, stringResource(R.string.cardHistory)) { page = "history" }
                     Action(Icons.Rounded.Delete, stringResource(R.string.delete), Rose) {
-                        ask(ctx.getString(R.string.confirmDeleteCards, 1), ctx.getString(R.string.delete), true) {
-                            scope.launch { repo.deleteCards(listOf(card.id)); toast(ctx.getString(R.string.deleted)); onDismiss(); onChanged(true) }
+                        // the whole note: a reverse / cloze / occlusion sibling must not be left behind
+                        val ids = repo.noteOf(card).map { it.id }.ifEmpty { listOf(card.id) }
+                        ask(ctx.getString(R.string.confirmDeleteCards, ids.size), ctx.getString(R.string.delete), true) {
+                            scope.launch { repo.deleteCards(ids); toast(ctx.getString(R.string.deleted)); onDismiss(); onChanged(true) }
                         }
                     }
                 }

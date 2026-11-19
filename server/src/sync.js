@@ -33,33 +33,44 @@ syncRouter.get('/', async (req, res) => {
   res.json({ decks: decks.rows, flashcards: cards.rows, review_logs: reviews.rows, study_sessions: sessions.rows, folders: folders.rows, user_settings: settings.rows, saved_public_decks: saved.rows });
 });
 
-const VALID_STATUS = new Set(['new', 'learning', 'review', 'relearning']);
+const STATUS = new Set(['new', 'learning', 'review', 'relearning']);
 
-/** Sort consecutive deck upserts so parent decks are always inserted before their subdecks. */
-function orderOps(ops) {
-  const deckUps = ops.filter((o) => o?.t === 'up' && o?.table === 'decks' && o?.row?.id);
-  if (deckUps.length <= 1) return ops;
-  const byId = new Map(deckUps.map((o) => [o.row.id, o]));
-  const visited = new Set();
-  const sortedDecks = [];
-  const visit = (o) => {
-    const id = o.row.id;
-    if (visited.has(id)) return;
-    visited.add(id);
-    const pid = o.row.parent_id;
-    if (pid && byId.has(pid) && pid !== id) visit(byId.get(pid));
-    sortedDecks.push(o);
+/**
+ * Deck upserts reordered so a parent deck is always written before its subdecks (a restored backup or an
+ * old client may send children first — the subdeck would otherwise lose its parent). Other ops keep their slots.
+ */
+export function parentFirst(ops) {
+  const slots = [], decks = [];
+  ops.forEach((o, i) => { if (o?.t === 'up' && o.table === 'decks' && o.row?.id) { slots.push(i); decks.push(o); } });
+  if (decks.length < 2) return ops;
+  const byId = new Map(decks.map((o) => [o.row.id, o])), seen = new Set(), sorted = [];
+  const visit = (o, depth = 0) => {
+    if (seen.has(o.row.id)) return;
+    seen.add(o.row.id);
+    const p = byId.get(o.row.parent_id);
+    if (p && depth < 50) visit(p, depth + 1);
+    sorted.push(o);
   };
-  deckUps.forEach(visit);
-  let di = 0;
-  return ops.map((o) => (o?.t === 'up' && o?.table === 'decks' && o?.row?.id ? sortedDecks[di++] : o));
+  decks.forEach((o) => visit(o));
+  const out = ops.slice();
+  slots.forEach((slot, k) => { out[slot] = sorted[k]; });
+  return out;
+}
+
+/** Values that would break a DB check constraint are repaired, never allowed to fail (and block) the whole sync batch. */
+function repair(table, row) {
+  const txt = (v, max, dflt) => (String(v ?? '').trim().slice(0, max) || dflt);
+  if (table === 'decks' && 'title' in row) row.title = txt(row.title, 100, 'Deck');
+  if (table === 'folders' && 'name' in row) row.name = txt(row.name, 60, 'Folder');
+  if (table === 'flashcards' && 'status' in row && !STATUS.has(row.status)) row.status = 'new';
+  if (table === 'review_logs' && 'rating' in row) row.rating = Math.min(4, Math.max(1, Math.round(Number(row.rating)) || 3));
 }
 
 /** Apply a batch of offline ops in order: [{ t: 'up'|'del', table, row?, id? }] */
 syncRouter.post('/', async (req, res) => {
-  const rawOps = req.body?.ops;
-  if (!Array.isArray(rawOps) || rawOps.length > 2000) return res.status(400).json({ error: 'ops must be an array (max 2000)' });
-  const ops = orderOps(rawOps);
+  const raw = req.body?.ops;
+  if (!Array.isArray(raw) || raw.length > 2000) return res.status(400).json({ error: 'ops must be an array (max 2000)' });
+  const ops = parentFirst(raw);
   const uid = req.userId;
   const applied = await tx(async (c) => {
     let n = 0;
@@ -74,21 +85,12 @@ syncRouter.post('/', async (req, res) => {
       }
       if (op.t !== 'up') continue;
       const row = { ...(op.row ?? {}) };
-      if (!CONFLICT[op.table] && !row.id) continue;
-      if (op.table === 'folders') {
-        row.name = String(row.name ?? '').trim().slice(0, 60) || 'Folder';
-      }
-      if (op.table === 'decks') {
-        row.title = String(row.title ?? '').trim().slice(0, 100) || 'Deck';
-        if (!KNOWN_CATS.has(row.category)) row.category = 'other';
-      }
+      if (!CONFLICT[op.table] && !row.id) continue; // malformed row without a primary key
+      repair(op.table, row);
+      if (op.table === 'decks' && !KNOWN_CATS.has(row.category)) row.category = 'other';
       if (op.table === 'flashcards') {
-        if (row.status && !VALID_STATUS.has(row.status)) row.status = 'new';
         const own = await c.query('select 1 from decks where id=$1 and user_id=$2', [row.deck_id, uid]);
         if (!own.rowCount) continue; // deck was deleted or belongs to someone else
-      }
-      if (op.table === 'review_logs') {
-        row.rating = Math.min(4, Math.max(1, Number(row.rating) || 3));
       }
       if (op.table === 'decks' && row.parent_id) {
         if (row.parent_id === row.id) row.parent_id = null;
@@ -97,7 +99,7 @@ syncRouter.post('/', async (req, res) => {
           if (!own.rowCount) row.parent_id = null;
         }
       }
-      if (op.table === 'decks' && row.folder_id) {
+      if ((op.table === 'decks') && row.folder_id) {
         const own = await c.query('select 1 from folders where id=$1 and user_id=$2', [row.folder_id, uid]);
         if (!own.rowCount) row.folder_id = null;
       }
@@ -106,8 +108,10 @@ syncRouter.post('/', async (req, res) => {
       const vals = [uid, ...use.map((k) => (k === 'data' ? JSON.stringify(row[k]) : row[k]))];
       const conflict = CONFLICT[op.table] ?? ['id'];
       const updates = use.filter((k) => !conflict.includes(k)).map((k) => `${qi(k)}=excluded.${qi(k)}`);
+      // last write wins: a device with older data (offline phone, a stale open tab) must not overwrite newer progress
+      const newer = use.includes('updated_at') ? ` and (${op.table}.updated_at is null or excluded.updated_at >= ${op.table}.updated_at)` : '';
       const sql = `insert into ${op.table} (${names.map(qi).join(',')}) values (${names.map((_, i) => `$${i + 1}`).join(',')})
-        on conflict (${conflict.map(qi).join(',')}) ${updates.length ? `do update set ${updates.join(',')} where ${op.table}.user_id = $1` : 'do nothing'}`;
+        on conflict (${conflict.map(qi).join(',')}) ${updates.length ? `do update set ${updates.join(',')} where ${op.table}.user_id = $1${newer}` : 'do nothing'}`;
       await c.query(sql, vals);
       n++;
     }

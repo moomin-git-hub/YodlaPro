@@ -33,7 +33,12 @@ class RichEditorState { internal var web: WebView? = null
     internal fun doneBusy() { web?.evaluateJavascript("doneBusy()", null) }
 }
 
+/**
+ * JS string literal for card text. `</` and `<!--` are escaped so text like `</script><script>…` can never close the
+ * inline <script> it is embedded in (MathView); U+2028/2029 are escaped because they end a JS line.
+ */
 internal fun quote(s: String) = kotlinx.serialization.json.JsonPrimitive(s).toString()
+    .replace("</", "<\\/").replace("<!--", "<\\!--").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 /**
  * Noji-style WYSIWYG editor (bold, italic, underline, strike, heading, lists, sub/sup, colours, highlight,
@@ -80,7 +85,9 @@ fun RichEditor(
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 setBackgroundColor(AColor.TRANSPARENT)
                 settings.javaScriptEnabled = true
-                settings.allowFileAccess = true
+                settings.allowFileAccess = true // offline card images are file:// URIs in app storage
+                @Suppress("DEPRECATION") settings.allowFileAccessFromFileURLs = false
+                @Suppress("DEPRECATION") settings.allowUniversalAccessFromFileURLs = false
                 settings.domStorageEnabled = false
                 isVerticalScrollBarEnabled = false
                 addJavascriptInterface(object {

@@ -53,13 +53,15 @@ export function CardEditor() {
       if (act === 'improve' || act === 'question') setEditorKey((k) => k + 1);
     } catch (e) { toast((e as Error).message, 'err'); }
   };
-  const isCloze = card?.cardType === 'cloze' || clozeIndices(f.front).length > 0;
-  const isOcc = card?.cardType === 'occlusion';
   const validate = () => {
     const e: Record<string, string> = {};
     if (!deckId) e.deck = t('selectDeck');
-    if (!isOcc && isBlank(f.front)) e.front = t('required'); else if (plainText(f.front).length > 2000) e.front = t('tooLong', { n: 2000 });
-    if (!isCloze && !isOcc && isBlank(f.back)) e.back = t('required'); else if (plainText(f.back).length > 4000) e.back = t('tooLong', { n: 4000 });
+    const occ = card?.cardType === 'occlusion', cloze = card?.cardType === 'cloze';
+    // cloze notes have no separate answer; image-occlusion notes have the image instead of a question
+    if (isBlank(f.front) && !occ) e.front = t('required');
+    else if (cloze && !clozeIndices(f.front).length) e.front = t('required');
+    else if (plainText(f.front).length > 2000) e.front = t('tooLong', { n: 2000 });
+    if (isBlank(f.back) && !occ && !cloze) e.back = t('required'); else if (plainText(f.back).length > 4000) e.back = t('tooLong', { n: 4000 });
     if (f.example.length > 2000) e.example = t('tooLong', { n: 2000 });
     if (f.explanation.length > 4000) e.explanation = t('tooLong', { n: 4000 });
     setErrs(e);
@@ -69,8 +71,7 @@ export function CardEditor() {
     if (!validate()) return;
     localStorage.setItem('yodla:lastDeck', deckId);
     if (card) {
-      const patch = { ...f, ...flags, deckId, front: f.front.trim(), back: f.back.trim() };
-      saveBasicNote(card, patch, reversed);
+      saveBasicNote(card, { ...f, ...flags, deckId }, basic && reversed);
       toast(t('saved')); nav(-1); return;
     }
     const [c] = addCards(deckId, [f]);

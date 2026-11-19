@@ -27,17 +27,52 @@ export function presetFor(deck, settings) {
 }
 
 const STUDYABLE = `f.user_id=$1 and not f.frozen and f.card_type <> 'occlusion' and not d.archived and d.algorithm <> 'fast'`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Optional study scope: a list of deck ids (a deck and its subdecks). Ids are validated, so inlining them is safe. */
+const scopeSql = (scope) => (Array.isArray(scope) ? ` and d.id in (${scope.filter((x) => UUID.test(x)).map((x) => `'${x}'`).join(',') || 'null'})` : '');
+export const isUuid = (s) => UUID.test(String(s ?? ''));
+
+/** A deck id plus all subdeck ids below it (any depth); [] if the deck isn't the user's. */
+export async function deckTree(userId, deckId) {
+  const { rows } = await q('select id, parent_id from decks where user_id=$1', [userId]);
+  if (!rows.some((r) => r.id === deckId)) return [];
+  const out = [deckId];
+  for (let i = 0; i < out.length; i++) rows.forEach((r) => { if (r.parent_id === out[i] && !out.includes(r.id)) out.push(r.id); });
+  return out;
+}
+
+/** All decks with card counts, ordered as a tree (parents first, then their subdecks). */
+export async function deckList(userId, now = Date.now()) {
+  const { rows } = await q(`select d.id, d.title, d.cover, d.parent_id, d.archived, d.algorithm,
+      count(f.*)::int total, count(f.*) filter (where f.status='new')::int fresh,
+      count(f.*) filter (where f.status<>'new' and f.due <= $2)::int due
+    from decks d left join flashcards f on f.deck_id=d.id and not f.frozen
+    where d.user_id=$1 group by d.id order by lower(d.title)`, [userId, new Date(endOfToday(now))]);
+  const out = [], seen = new Set();
+  const walk = (parent, depth) => rows.filter((r) => (r.parent_id ?? null) === parent && !seen.has(r.id)).forEach((r) => { seen.add(r.id); out.push({ ...r, depth }); walk(r.id, depth + 1); });
+  walk(null, 0);
+  rows.filter((r) => !seen.has(r.id)).forEach((r) => out.push({ ...r, depth: 0 })); // parent missing
+  return out;
+}
+
+/** Changes app settings from the server (Telegram / Claude); the newer updatedAt makes every device take them on its next sync. */
+export async function updateSettings(userId, patch) {
+  const data = { ...patch, updatedAt: Date.now() };
+  await q(`insert into user_settings (user_id, data, updated_at) values ($1, $2::jsonb, now())
+    on conflict (user_id) do update set data = user_settings.data || excluded.data, updated_at = now()`, [userId, JSON.stringify(data)]);
+}
 
 /**
  * The next card to show in Telegram — same priorities as the app: learning cards whose step time has come,
  * then reviews due today, then new words within today's limit (one card per note per day).
  * Returns { card, deck, left } or { waitMs } (a learning card comes back soon) or {} (nothing to study).
  */
-export async function nextCard(userId, now = Date.now(), skip = []) {
+export async function nextCard(userId, now = Date.now(), skip = [], scope = null) {
   const settings = await settingsOf(userId);
   const sod = new Date(startOfDay(now)), eod = new Date(endOfToday(now));
   const pick = async (sql, params) => (await q(sql, params)).rows[0];
-  const base = `select f.*, d.title deck_title, d.algorithm, d.preset, d.tts_front from flashcards f join decks d on d.id=f.deck_id where ${STUDYABLE} and not (f.id = any($2::uuid[]))`;
+  const inScope = scopeSql(scope);
+  const base = `select f.*, d.title deck_title, d.algorithm, d.preset, d.tts_front from flashcards f join decks d on d.id=f.deck_id where ${STUDYABLE}${inScope} and not (f.id = any($2::uuid[]))`;
   let row = await pick(`${base} and f.status in ('learning','relearning') and f.due <= $3 order by f.due limit 1`, [userId, skip, new Date(now)]);
   if (!row) row = await pick(`${base} and f.status='review' and f.due <= $3 order by f.due limit 1`, [userId, skip, eod]);
   if (!row) {
@@ -54,25 +89,26 @@ export async function nextCard(userId, now = Date.now(), skip = []) {
     row = fresh.find((r) => (used[r.deck_id] ?? 0) < limit && !touchedNotes.has(r.note_id ?? r.id));
   }
   if (!row) {
-    const soon = await pick(`select min(f.due) due from flashcards f join decks d on d.id=f.deck_id where ${STUDYABLE} and f.status in ('learning','relearning') and f.due <= $2`, [userId, eod]);
+    const soon = await pick(`select min(f.due) due from flashcards f join decks d on d.id=f.deck_id where ${STUDYABLE}${inScope} and f.status in ('learning','relearning') and f.due <= $2`, [userId, eod]);
     return soon?.due ? { waitMs: Math.max(0, ms(soon.due) - now) } : {};
   }
-  const left = await dueCount(userId, now);
+  const left = await dueCount(userId, now, scope);
   const deck = { id: row.deck_id, title: row.deck_title, algorithm: row.algorithm, preset: row.preset, ttsFront: row.tts_front };
   return { card: toCard(row), deck, cfg: presetFor(deck, settings), left };
 }
 
 /** Cards waiting today (learning due now + reviews due today + new words within the limit). */
-export async function dueCount(userId, now = Date.now()) {
+export async function dueCount(userId, now = Date.now(), scope = null) {
   const settings = await settingsOf(userId);
+  const inScope = scopeSql(scope);
   const { rows: [r] } = await q(`select
       count(*) filter (where f.status in ('learning','relearning') and f.due <= $2)::int learn,
       count(*) filter (where f.status='review' and f.due <= $3)::int rev
-    from flashcards f join decks d on d.id=f.deck_id where ${STUDYABLE}`, [userId, new Date(now), new Date(endOfToday(now))]);
+    from flashcards f join decks d on d.id=f.deck_id where ${STUDYABLE}${inScope}`, [userId, new Date(now), new Date(endOfToday(now))]);
   const { rows: decks } = await q(`select d.id, count(f.*) filter (where f.status='new')::int fresh,
       (select count(distinct l.card_id)::int from review_logs l join flashcards c on c.id=l.card_id where l.user_id=$1 and l.deck_id=d.id and l.ts >= $2 and l.prev_status='new' and c.status <> 'new') used
     from decks d left join flashcards f on f.deck_id=d.id and not f.frozen and f.card_type <> 'occlusion'
-    where d.user_id=$1 and not d.archived and d.algorithm <> 'fast' group by d.id`, [userId, new Date(startOfDay(now))]);
+    where d.user_id=$1 and not d.archived and d.algorithm <> 'fast'${inScope} group by d.id`, [userId, new Date(startOfDay(now))]);
   const limit = settings.newPerDay ?? 20;
   const fresh = decks.reduce((a, d) => a + Math.min(d.fresh, Math.max(0, limit - d.used)), 0);
   return r.learn + r.rev + fresh;
@@ -112,15 +148,24 @@ export async function targetDeck(userId, deckId) {
   return { id, title: 'Telegram' };
 }
 
+const CLOZE_NO = /\{\{c(\d+)::/g;
+/** Adds notes; a {{c1::…}} note becomes one cloze card per number (like the apps). Returns the new card ids. */
 export async function addCards(userId, deckId, cards) {
   const now = Date.now();
   const ids = [];
   await tx(async (c) => {
     for (const [i, x] of cards.entries()) {
-      const id = randomUUID(); ids.push(id);
-      await c.query(`insert into flashcards (id, user_id, deck_id, front, back, example, explanation, note_id, card_type, created_at, updated_at, due)
-        values ($1,$2,$3,$4,$5,$6,$7,$1,'basic',$8,$8,$8)`,
-        [id, userId, deckId, String(x.front).slice(0, 500), String(x.back ?? '').slice(0, 1500), String(x.example ?? '').slice(0, 800), String(x.explanation ?? '').slice(0, 1000), new Date(now + i)]);
+      const front = String(x.front ?? '').trim().slice(0, 2000), back = String(x.back ?? '').trim().slice(0, 4000);
+      if (!front) continue;
+      const nums = [...new Set([...front.matchAll(CLOZE_NO)].map((m) => +m[1]))].sort((a, b) => a - b);
+      const noteId = randomUUID();
+      const variants = nums.length ? nums.map((n) => ({ type: 'cloze', extra: JSON.stringify({ c: n }) })) : [{ type: 'basic', extra: '' }];
+      for (const [k, v] of variants.entries()) {
+        const id = k === 0 ? noteId : randomUUID(); ids.push(id);
+        await c.query(`insert into flashcards (id, user_id, deck_id, front, back, example, explanation, note_id, card_type, extra, created_at, updated_at, due)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$11)`,
+          [id, userId, deckId, front, back, String(x.example ?? '').trim().slice(0, 2000), String(x.explanation ?? '').trim().slice(0, 4000), noteId, v.type, v.extra, new Date(now + i)]);
+      }
     }
   });
   return ids;
@@ -128,6 +173,96 @@ export async function addCards(userId, deckId, cards) {
 
 export async function deleteCards(userId, ids) {
   await q('delete from flashcards where user_id=$1 and id = any($2::uuid[])', [userId, ids]);
+}
+
+/** Deletes whole notes (a card together with its reverse / cloze / occlusion siblings). Returns how many cards went. */
+export async function deleteNotes(userId, ids) {
+  const { rowCount } = await q(`delete from flashcards where user_id=$1 and coalesce(note_id, id) in
+    (select coalesce(note_id, id) from flashcards where user_id=$1 and id = any($2::uuid[]))`, [userId, ids]);
+  return rowCount;
+}
+
+/** Updates a note's content: question / answer / example / explanation go to every sibling card. */
+export async function editNote(userId, cardId, patch) {
+  const F = { front: 2000, back: 4000, example: 2000, explanation: 4000 };
+  const sets = [], vals = [userId, cardId];
+  for (const [k, max] of Object.entries(F)) if (typeof patch[k] === 'string') { vals.push(patch[k].trim().slice(0, max)); sets.push(`${k}=$${vals.length}`); }
+  if (!sets.length) return 0;
+  const { rowCount } = await q(`update flashcards set ${sets.join(',')}, updated_at=now() where user_id=$1 and coalesce(note_id, id) =
+    (select coalesce(note_id, id) from flashcards where id=$2 and user_id=$1)`, vals);
+  return rowCount;
+}
+
+/** Sets flags (bookmarked / difficult / frozen) on a whole note. */
+export async function flagNote(userId, cardId, flag, value) {
+  if (!['bookmarked', 'difficult', 'frozen'].includes(flag)) return 0;
+  const { rowCount } = await q(`update flashcards set ${flag}=$3, updated_at=now() where user_id=$1 and coalesce(note_id, id) =
+    (select coalesce(note_id, id) from flashcards where id=$2 and user_id=$1)`, [userId, cardId, !!value]);
+  return rowCount;
+}
+
+/** Fresh progress: the cards become new again. */
+export async function resetCards(userId, ids) {
+  await q(`update flashcards set status='new', step=0, reps=0, lapses=0, "interval"=0, ease=2.5, stability=0, difficulty=0, last_review=null,
+    due=now(), updated_at=now() where user_id=$1 and id = any($2::uuid[])`, [userId, ids]);
+}
+
+/** Creates a deck with the user's default algorithm / preset. */
+export async function createDeck(userId, title, extra = {}) {
+  const s = await settingsOf(userId);
+  const id = randomUUID(), name = String(title ?? '').trim().slice(0, 100) || 'Deck';
+  const parent = extra.parentId && (await deckTree(userId, extra.parentId)).length ? extra.parentId : null;
+  await q(`insert into decks (id, user_id, title, description, category, cover, color, algorithm, preset, parent_id, created_at, updated_at)
+    values ($1,$2,$3,$4,'general',$5,'violet',$6,$7,$8,now(),now())`,
+    [id, userId, name, String(extra.description ?? '').slice(0, 500), String(extra.cover || '📘').slice(0, 8), s.defaultAlgorithm || 'fsrs', s.defaultPreset || 'standard', parent]);
+  return { id, title: name };
+}
+
+/** Deletes a deck with its subdecks and all their cards. Returns the number of decks removed. */
+export async function deleteDeck(userId, deckId) {
+  const ids = await deckTree(userId, deckId);
+  if (!ids.length) return 0;
+  await q('delete from decks where user_id=$1 and id = any($2::uuid[])', [userId, ids]);
+  return ids.length;
+}
+
+/** Search notes by text (question, answer, example, explanation). */
+export async function searchCards(userId, text, limit = 20) {
+  const like = '%' + String(text).slice(0, 100).replace(/[\\%_]/g, (m) => '\\' + m) + '%';
+  const { rows } = await q(`select f.*, d.title deck_title from flashcards f join decks d on d.id=f.deck_id
+    where f.user_id=$1 and f.card_type <> 'reverse' and (f.front ilike $2 or f.back ilike $2 or f.example ilike $2 or f.explanation ilike $2)
+    order by f.updated_at desc limit 200`, [userId, like]);
+  const seen = new Set();
+  return rows.filter((r) => { const k = r.note_id ?? r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, limit).map(toCardWithDeck);
+}
+
+/** Cards of a deck (one per note), oldest first, for paging in a list. */
+export async function deckCards(userId, deckId, offset = 0, limit = 8) {
+  const { rows } = await q(`select distinct on (coalesce(f.note_id, f.id)) f.* from flashcards f where f.user_id=$1 and f.deck_id=$2 and f.card_type <> 'reverse'
+    order by coalesce(f.note_id, f.id), f.created_at`, [userId, deckId]);
+  rows.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  return { total: rows.length, cards: rows.slice(offset, offset + limit).map(toCard) };
+}
+
+/** What happened today: reviews, new words, accuracy, time, hardest words and tomorrow's load. */
+export async function todayData(userId, now = Date.now()) {
+  const sod = new Date(startOfDay(now)), eod = endOfToday(now);
+  const [{ rows: logs }, { rows: [tm] }, { rows: allDays }] = await Promise.all([
+    q(`select l.rating, l.prev_status, l.card_id, l.duration_ms, f.front, f.back, f.card_type from review_logs l left join flashcards f on f.id=l.card_id
+       where l.user_id=$1 and l.ts >= $2 order by l.ts`, [userId, sod]),
+    q(`select count(*) filter (where f.status<>'new' and f.due > $2 and f.due <= $3)::int tomorrow
+       from flashcards f join decks d on d.id=f.deck_id where f.user_id=$1 and not f.frozen and not d.archived`, [userId, new Date(eod), new Date(eod + DAY)]),
+    q(`select distinct (date_trunc('day', ts at time zone $2)) d from review_logs where user_id=$1`, [userId, process.env.TZ || 'Asia/Tashkent']),
+  ]);
+  const again = new Map();
+  logs.filter((l) => l.rating === 1 && l.front != null).forEach((l) => again.set(l.card_id, { front: l.card_type === 'reverse' ? l.back : l.front, n: (again.get(l.card_id)?.n ?? 0) + 1 }));
+  return {
+    reviews: logs.length, cards: new Set(logs.map((l) => l.card_id)).size, correct: logs.filter((l) => l.rating >= 3).length,
+    learnedNew: new Set(logs.filter((l) => l.prev_status === 'new').map((l) => l.card_id)).size,
+    minutes: Math.round(logs.reduce((a, l) => a + (l.duration_ms ?? 0), 0) / 60000),
+    hard: [...again.values()].sort((a, b) => b.n - a.n).slice(0, 5), tomorrow: tm.tomorrow,
+    streak: streaks(allDays.map((r) => startOfDay(new Date(r.d).getTime() + 12 * 3600_000))),
+  };
 }
 
 /** Current and longest streak (consecutive study days ending today or yesterday) and active days. */

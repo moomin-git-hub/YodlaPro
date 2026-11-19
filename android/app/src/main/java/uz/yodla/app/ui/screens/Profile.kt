@@ -97,6 +97,7 @@ fun ProfileScreen(nav: NavHostController) {
             }
         }
         TelegramCard()
+        ClaudeCard()
         NavRow(Icons.Rounded.BarChart, Brand, stringResource(R.string.stats)) { nav.go("stats") }
 
         Group(stringResource(R.string.appearance)) {
@@ -322,6 +323,56 @@ fun ServerScreen(nav: NavHostController) {
 }
 
 /** Connect the account to @yodlaPro_bot: study, reminders and reports in Telegram. */
+@Composable
+private fun ClaudeCard() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var active by remember { mutableStateOf<Boolean?>(null) }
+    var url by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var warn by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { active = Graph.remote.claudeActive() }
+    val a = active ?: return
+    fun copy(u: String) {
+        (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Yodla · Claude", u))
+        android.widget.Toast.makeText(ctx, ctx.getString(R.string.claudeCopied), android.widget.Toast.LENGTH_SHORT).show()
+    }
+    fun create() {
+        busy = true
+        scope.launch {
+            runCatching { Graph.remote.claudeCreate() }.onSuccess { url = it; active = true; copy(it) }
+                .onFailure { android.widget.Toast.makeText(ctx, errMessage(ctx, it), android.widget.Toast.LENGTH_LONG).show() }
+            busy = false
+        }
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)).padding(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFF97316).copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.AutoAwesome, null, tint = Color(0xFFF97316)) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Claude", fontWeight = FontWeight.Bold)
+                Text(stringResource(if (a) R.string.claudeActive else R.string.claudeDesc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+            }
+            if (url.isEmpty()) {
+                if (a) FilledTonalButton({ warn = true }, enabled = !busy) { Text(stringResource(R.string.claudeNew)) }
+                else Button({ create() }, enabled = !busy) { Text(stringResource(R.string.claudeCreate)) }
+            }
+        }
+        if (url.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(url, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), maxLines = 2)
+                IconButton({ copy(url) }) { Icon(Icons.Rounded.ContentCopy, stringResource(R.string.claudeCopied)) }
+            }
+        }
+        if (url.isNotEmpty() || !a) { Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.claudeHow), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (a) TextButton({ scope.launch { runCatching { Graph.remote.claudeRevoke() }; url = ""; active = Graph.remote.claudeActive() } }) { Text(stringResource(R.string.claudeRevoke), color = Rose) }
+    }
+    if (warn) AlertDialog(onDismissRequest = { warn = false }, text = { Text(stringResource(R.string.claudeNewWarn)) },
+        confirmButton = { TextButton({ warn = false; create() }) { Text(stringResource(R.string.claudeNew)) } },
+        dismissButton = { TextButton({ warn = false }) { Text(stringResource(R.string.cancel)) } })
+}
+
 @Composable
 private fun TelegramCard() {
     val ctx = LocalContext.current

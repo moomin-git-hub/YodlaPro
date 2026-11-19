@@ -80,6 +80,12 @@ class Remote(private val ctx: Context, private val repo: Repo) {
     }.getOrNull()
     suspend fun telegramLink(): String = repo.api.request("POST", "/telegram/link").jsonObject["url"]!!.jsonPrimitive.content
     suspend fun telegramUnlink() { repo.api.request("DELETE", "/telegram/link") }
+
+    // ---- Claude connector (personal remote MCP link) ----
+    /** null = not signed in to the server; otherwise whether a link exists. */
+    suspend fun claudeActive(): Boolean? = if (!repo.cloud) null else runCatching { repo.api.request("GET", "/claude").jsonObject["active"]!!.jsonPrimitive.content.toBoolean() }.getOrNull()
+    suspend fun claudeCreate(): String = repo.api.request("POST", "/claude").jsonObject["url"]!!.jsonPrimitive.content
+    suspend fun claudeRevoke() { repo.api.request("DELETE", "/claude") }
     /** pdf (overview) · xlsx (all cards) · docx (hard-words notebook) */
     suspend fun report(fmt: String, period: String = "week") = repo.api.download("/reports/$fmt?period=$period")
 

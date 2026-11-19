@@ -14,11 +14,14 @@ export async function checkAi(): Promise<{ status: AiStatus; provider?: string }
   } catch { return { status: 'unconfigured' }; }
 }
 
-export async function generateCards(input: { topic?: string; text?: string; count: number; language: string; format?: string; detail?: string; instructions?: string }): Promise<DraftCard[]> {
+/** A cloze note ({{c1::…}}) needs no separate answer. */
+export const hasCloze = (s: string) => /\{\{c\d+::/.test(s);
+
+export async function generateCards(input: { topic?: string; text?: string; count: number; language: string }): Promise<DraftCard[]> {
   const data = await api<{ cards: DraftCard[] }>('/ai/generate', { body: { ...input, text: input.text?.slice(0, 60_000) } });
   if (!Array.isArray(data?.cards)) throw new Error('Bad response');
   return data.cards
-    .filter((c) => c && typeof c.front === 'string' && c.front.trim() && ((typeof c.back === 'string' && c.back.trim()) || /\{\{c\d+::/.test(c.front)))
+    .filter((c) => c && typeof c.front === 'string' && c.front.trim() && ((typeof c.back === 'string' && c.back.trim()) || hasCloze(c.front)))
     .map((c) => ({ front: c.front.trim(), back: (c.back ?? '').trim(), example: c.example?.trim() ?? '', explanation: c.explanation?.trim() ?? '' }));
 }
 
@@ -101,14 +104,7 @@ export async function fetchPublicCards(deck: PublicDeck): Promise<PublicDeck['ca
   return api<PublicDeck['cards']>(`/public-decks/${deck.id}/cards`, { auth: false }).catch(() => []);
 }
 
-export async function publishDeck(d: { title: string; description: string; category: string; cover: string; color: string }, cards: (DraftCard & { cardType?: string; noteId?: string; id?: string })[]) {
-  const seen = new Set<string>();
-  const unique = cards.filter((c) => {
-    if (c.cardType === 'occlusion' || c.cardType === 'reverse') return false;
-    const key = c.noteId ?? c.id;
-    if (key) { if (seen.has(key)) return false; seen.add(key); }
-    return true;
-  });
-  const r = await api<{ id: string }>('/public-decks', { body: { title: d.title, description: d.description, category: d.category, cover: d.cover, color: d.color, cards: unique.map(({ front, back, example, explanation }) => ({ front, back, example, explanation })) } });
+export async function publishDeck(d: { title: string; description: string; category: string; cover: string; color: string }, cards: DraftCard[]) {
+  const r = await api<{ id: string }>('/public-decks', { body: { title: d.title, description: d.description, category: d.category, cover: d.cover, color: d.color, cards: cards.map(({ front, back, example, explanation }) => ({ front, back, example, explanation })) } });
   return r.id;
 }

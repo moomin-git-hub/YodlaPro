@@ -1,3 +1,4 @@
+import { translate } from './i18n';
 import { ls } from './util';
 
 const RAW = import.meta.env.VITE_API_URL as string | undefined;
@@ -22,7 +23,7 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   try { res = await fetch(`${BASE}/api${path}`, { method: opts.method ?? (body ? 'POST' : 'GET'), headers, body }); }
   catch { throw new ApiError('offline', 0); }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data?.error ?? `HTTP ${res.status}`, res.status);
+  if (!res.ok) throw new ApiError(data?.error === 'aiBusy' ? translate((['en', 'uz', 'ru'].includes(document.documentElement.lang) ? document.documentElement.lang : 'en') as 'en', 'aiBusy') : data?.error ?? `HTTP ${res.status}`, res.status);
   return data as T;
 }
 

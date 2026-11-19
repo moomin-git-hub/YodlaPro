@@ -7,11 +7,11 @@ import { parseDelimited, readFileText } from '../lib/util';
 import { Button, IconButton, PageHeader, toast } from '../components/ui';
 import { DeckPicker } from '../components/DeckPicker';
 import type { DraftCard } from '../lib/types';
+import { hasCloze } from '../lib/ai';
 
 function parse(text: string): { cards: DraftCard[]; deck?: { title: string; description?: string; category?: string; cover?: string; color?: string } } {
   const s = text.trim();
   if (!s) return { cards: [] };
-  const hasCloze = (f: string) => /\{\{c\d+::/.test(f);
   if ((s.startsWith('{') && !s.startsWith('{{')) || s.startsWith('[')) {
     try {
       const j = JSON.parse(s);

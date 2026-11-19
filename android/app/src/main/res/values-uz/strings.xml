@@ -443,4 +443,12 @@
     <string name="wipe">Barcha ma\'lumotlarimni o\'chirish</string>
     <string name="wrongCode">Email yoki tiklash kodi noto\'g\'ri</string>
     <string name="wrongCredentials">Email yoki parol noto\'g\'ri</string>
+    <string name="claudeDesc">Istalgan Claude chatidan karta qo‘shish, test va statistika</string>
+    <string name="claudeActive">Claude’ga ulangan</string>
+    <string name="claudeCreate">Havola yaratish</string>
+    <string name="claudeNew">Yangi havola</string>
+    <string name="claudeRevoke">Havolani o‘chirish</string>
+    <string name="claudeCopied">Havola nusxalandi</string>
+    <string name="claudeHow">Claude’da: Settings → Connectors → Add custom connector → shu havolani qo‘ying. Keyin shunchaki yozing: “bu so‘zlarni Yodla’dagi deckimga qo‘sh”. Havolani hech kimga bermang — u bilan kartalaringizni o‘zgartirish mumkin.</string>
+    <string name="claudeNewWarn">Eski havola ishlamay qoladi. Davom etaymi?</string>
 </resources>

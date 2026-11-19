@@ -44,8 +44,26 @@ fun Card.answerText(): String = when (type) {
 /** True when an editor value has no text and no image. */
 fun isBlankRich(s: String) = htmlToPlain(s).isBlank() && !s.contains("<img", true)
 
-private val htmlRe = Regex("</?(b|i|u|s|strong|em|p|div|br|h[1-6]|ul|ol|li|sub|sup|span|code|pre|a|img|mark|font)\\b", RegexOption.IGNORE_CASE)
+private val htmlRe = Regex("</?(b|i|u|s|strong|em|p|div|br|h[1-6]|ul|ol|li|sub|sup|span|code|pre|a|img|mark|font)\\b|&(nbsp|amp|lt|gt|quot|#\\d+);", RegexOption.IGNORE_CASE)
 fun isHtml(s: String) = htmlRe.containsMatchIn(s)
+
+private val trailJunk = Regex("(?i)(<div>\\s*<br\\s*/?>\\s*</div>|<p>\\s*<br\\s*/?>\\s*</p>|<br\\s*/?>|\\s)+$")
+private val leadJunk = Regex("(?i)^(<div>\\s*<br\\s*/?>\\s*</div>|<br\\s*/?>|\\s)+")
+private val anyTag = Regex("(?i)<[a-z][^>]*>")
+
+/**
+ * Normalises an editor value before saving: typed spaces come back as `&nbsp;`, plus trailing `<br>`/empty blocks.
+ * A value without real markup is stored as plain text ("olma", not "olma&nbsp;"). Same as web `cleanRich`.
+ */
+fun cleanRich(s: String): String {
+    if (s.isEmpty()) return ""
+    val h = s.replace("&nbsp;", " ").replace('\u00a0', ' ').replace(trailJunk, "").replace(leadJunk, "").trim()
+    if (!anyTag.containsMatchIn(h)) {
+        val plain = h.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+        if (!isHtml(plain)) return plain
+    }
+    return h
+}
 
 /** Strip HTML for list previews, search and TTS. */
 fun htmlToPlain(s: String): String = if (!isHtml(s)) s else s

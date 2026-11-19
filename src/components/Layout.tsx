@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Layers, Compass, Plus, User, BarChart3, Search, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useT } from '../lib/i18n';
-import { cx } from '../lib/util';
+import { cx, isTyping } from '../lib/util';
 import { Logo } from './Logo';
 
 export function Layout() {
@@ -17,9 +17,7 @@ export function Layout() {
   }, []);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      const tag = el?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable || el?.closest?.('[contenteditable="true"]') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTyping(e) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === '/') { e.preventDefault(); nav('/search'); }
       else if (e.key.toLowerCase() === 'n') { e.preventDefault(); nav('/card/new'); }
     };

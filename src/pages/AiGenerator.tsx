@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Sparkles, FileText, Type, Lightbulb, Trash2, Settings2, Wand2, CheckCircle2 } from 'lucide-react';
 import { addCards } from '../lib/store';
 import { useT } from '../lib/i18n';
-import { checkAi, generateCards, quickExtract, extractFileText, archiveUpload, type AiStatus } from '../lib/ai';
+import { hasCloze, checkAi, generateCards, quickExtract, extractFileText, archiveUpload, type AiStatus } from '../lib/ai';
 import { Button, Field, IconButton, PageHeader, Segmented, toast } from '../components/ui';
 import { DeckPicker } from '../components/DeckPicker';
 import type { DraftCard } from '../lib/types';
@@ -64,7 +64,7 @@ export default function AiGenerator() {
 
   const saveAll = () => {
     if (!drafts) return;
-    const valid = drafts.filter((c) => c.front.trim() && (c.back.trim() || /\{\{c\d+::/.test(c.front)));
+    const valid = drafts.filter((c) => c.front.trim() && (c.back.trim() || hasCloze(c.front)));
     if (!deckId) return setDeckErr(t('selectDeck'));
     addCards(deckId, valid);
     toast(t('saveCards', { n: valid.length }));
@@ -92,7 +92,7 @@ export default function AiGenerator() {
             </li>
           ))}
         </ul>
-        <div className="sticky bottom-24 lg:bottom-4"><Button size="lg" block onClick={saveAll} disabled={!drafts.some((c) => c.front.trim() && (c.back.trim() || /\{\{c\d+::/.test(c.front)))} className="shadow-2xl">{t('saveCards', { n: drafts.filter((c) => c.front.trim() && (c.back.trim() || /\{\{c\d+::/.test(c.front))).length })}</Button></div>
+        <div className="sticky bottom-24 lg:bottom-4"><Button size="lg" block onClick={saveAll} disabled={!drafts.some((c) => c.front.trim() && (c.back.trim() || hasCloze(c.front)))} className="shadow-2xl">{t('saveCards', { n: drafts.filter((c) => c.front.trim() && (c.back.trim() || hasCloze(c.front))).length })}</Button></div>
       </div>
     );
   }

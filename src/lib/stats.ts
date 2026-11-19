@@ -54,7 +54,7 @@ export function forecast(cards: Card[], days = 7) {
   const out: number[] = Array(days).fill(0);
   const base = startOfDay(Date.now());
   for (const c of cards) {
-    if (c.status === 'new' || c.frozen) continue;
+    if (c.status === 'new') continue;
     const idx = c.due <= endOfToday() ? 0 : Math.floor((startOfDay(c.due) - base) / DAY);
     if (idx >= 0 && idx < days) out[idx]++;
   }

@@ -443,4 +443,12 @@
     <string name="wipe">Удалить все мои данные</string>
     <string name="wrongCode">Неверный email или код</string>
     <string name="wrongCredentials">Неверный email или пароль</string>
+    <string name="claudeDesc">Карточки, тесты и статистика из любого чата Claude</string>
+    <string name="claudeActive">Подключено к Claude</string>
+    <string name="claudeCreate">Создать ссылку</string>
+    <string name="claudeNew">Новая ссылка</string>
+    <string name="claudeRevoke">Отозвать ссылку</string>
+    <string name="claudeCopied">Ссылка скопирована</string>
+    <string name="claudeHow">В Claude: Settings → Connectors → Add custom connector → вставьте ссылку. Затем просто попросите: «добавь эти слова в мою колоду Yodla». Никому не давайте ссылку — с ней можно менять ваши карточки.</string>
+    <string name="claudeNewWarn">Старая ссылка перестанет работать. Продолжить?</string>
 </resources>

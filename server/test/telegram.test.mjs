@@ -161,6 +161,98 @@ params.set('hash', 'bad'.padEnd(64, '0'));
 await new Promise((r) => { tg.miniAppAuth({ body: { initData: params.toString() } }, { json(b) { res.body = b; r(); return this; }, status(c) { res.code = c; return this; } }, r); });
 assert.equal(res.code, 401); console.log('✓ Mini App sign-in verifies Telegram signature');
 
+// 13. add card with example + explanation: one line, labelled lines, and the step-by-step wizard
+const cardOf = async (front) => (await q(`select * from flashcards where user_id=$1 and front=$2`, [user.id, front])).rows[0];
+await msg('book - kitob | I read a book. | ot, sanaladigan');
+let bk = await cardOf('book');
+assert.equal(bk.back, 'kitob'); assert.equal(bk.example, 'I read a book.'); assert.equal(bk.explanation, 'ot, sanaladigan');
+await msg('pen - ruchka\nmisol: Give me a pen.\nizoh: yozish quroli\ncup - piyola');
+const pen = await cardOf('pen'), cup = await cardOf('cup');
+assert.equal(pen.example, 'Give me a pen.'); assert.equal(pen.explanation, 'yozish quroli'); assert.equal(cup.back, 'piyola');
+await msg('/qoshish');
+assert.match(last('sendMessage').text, /1\/4/);
+await msg('window'); assert.match(last('sendMessage').text, /2\/4/);
+await msg('deraza'); assert.match(last('sendMessage').text, /3\/4/);
+await msg('Open the window.'); assert.match(last('sendMessage').text, /4\/4/);
+await cb('wzs');
+const win = await cardOf('window');
+assert.equal(win.back, 'deraza'); assert.equal(win.example, 'Open the window.'); assert.equal(win.explanation, '');
+assert.match(last('sendMessage').text, /saqlandi/);
+console.log('✓ cards with example + explanation: one line, labelled lines, 4-step wizard (skip)');
+
+// 14. AI fills example + explanation for a card that has none
+aiReply = '{"cards":[{"i":1,"example":"The cat sleeps.","explanation":"uy hayvoni"}]}';
+await msg('cat - mushuk');
+await cb('enrich');
+const cat = await cardOf('cat');
+assert.equal(cat.example, 'The cat sleeps.'); assert.equal(cat.explanation, 'uy hayvoni'); console.log('✓ AI adds example + explanation to new cards');
+
+// 15. decks: list → open → create subdeck → rename → study only that deck → archive → delete
+await msg('/decklar');
+let dl = last('sendMessage');
+assert.ok(markup(dl).some((b) => b.callback_data === `dk:${deckId}`));
+await cb(`dk:${deckId}`, { message_id: dl.message_id ?? mid, chat: { id: CHAT }, text: 'x' });
+assert.match(last('editMessageText').text, /4000 words/);
+await cb(`ds:${deckId}`); await msg('Fe’llar');
+const { rows: [sub] } = await q(`select * from decks where user_id=$1 and title='Fe’llar'`, [user.id]);
+assert.equal(sub.parent_id, deckId);
+await cb(`dr:${sub.id}`); await msg('Verbs');
+assert.equal((await q('select title from decks where id=$1', [sub.id])).rows[0].title, 'Verbs');
+await q(`insert into flashcards (id, user_id, deck_id, front, back, note_id) values ($1,$2,$3,'run','yugurmoq',$1)`, [crypto.randomUUID(), user.id, sub.id]);
+await cb(`sd:${sub.id}`);
+assert.match(last('sendMessage').text, /Verbs/); assert.match(last('sendMessage').text, /run/);
+await cb('stop');
+await cb(`da:${sub.id}`); assert.equal((await q('select archived from decks where id=$1', [sub.id])).rows[0].archived, true);
+await cb(`dx:${sub.id}`); assert.match(last('editMessageText').text, /o‘chiraymi/);
+await cb(`dy:${sub.id}`);
+assert.equal((await q('select count(*)::int n from decks where id=$1', [sub.id])).rows[0].n, 0);
+assert.equal((await q(`select count(*)::int n from flashcards where front='run' and user_id=$1`, [user.id])).rows[0].n, 0);
+console.log('✓ decks: list, open, subdeck, rename, study one deck, archive, delete');
+
+// 16. cards: list → open → edit answer / clear example → bookmark → freeze → reset → delete (whole note)
+await cb(`cl:${deckId}:0`);
+assert.ok(markup(last('editMessageText')).some((b) => b.callback_data.startsWith('cd:')));
+const pr = await cardOf('principle');
+await cb(`cd:${pr.id}`); assert.match(last('editMessageText').text, /axloq qoidalari/);
+await cb(`ce:back:${pr.id}`); await msg('tamoyil');
+await cb(`ce:example:${pr.id}`); await msg('-');
+let prn = await cardOf('principle');
+assert.equal(prn.back, 'tamoyil'); assert.equal(prn.example, '');
+await cb(`cf:bookmarked:${pr.id}`); await cb(`cf:frozen:${pr.id}`);
+prn = await cardOf('principle'); assert.equal(prn.bookmarked, true); assert.equal(prn.frozen, true);
+await cb(`cr:${pr.id}`); prn = await cardOf('principle'); assert.equal(prn.status, 'new'); assert.equal(prn.reps, 0);
+const revId = crypto.randomUUID();
+await q(`insert into flashcards (id, user_id, deck_id, front, back, note_id, card_type) values ($1,$2,$3,'principle','tamoyil',$4,'reverse')`, [revId, user.id, deckId, pr.note_id ?? pr.id]);
+await cb(`cx:${pr.id}`); await cb(`cy:${pr.id}`);
+assert.equal((await q(`select count(*)::int n from flashcards where user_id=$1 and front='principle'`, [user.id])).rows[0].n, 0);
+console.log('✓ cards: list, open, edit, clear field, bookmark, freeze, reset, delete whole note');
+
+// 17. search, stats, daily report on demand, settings (new words per day, shuffle, daily time)
+await msg('/qidir kitob'); assert.match(last('sendMessage').text, /1 ta natija/);
+await msg('/qidir zzzz'); assert.match(last('sendMessage').text, /hech narsa topilmadi/);
+await msg('/statistika'); assert.match(last('sendMessage').text, /Statistika/);
+await msg('/bugun'); assert.match(last('sendMessage').text, /Bugungi hisobot/); assert.match(last('sendMessage').text, /Takrorlar: <b>\d+/);
+await msg('/sozlamalar');
+await cb('np:5'); await cb('shf'); await cb('dt');
+const { rows: [st2] } = await q('select data from user_settings where user_id=$1', [user.id]);
+assert.equal(st2.data.newPerDay, 25); assert.equal(st2.data.shuffle, true); assert.ok(st2.data.updatedAt > Date.now() - 60_000);
+const { rows: [lk2] } = await q('select prefs from telegram_links where user_id=$1', [user.id]);
+assert.equal(lk2.prefs.dailyTime, '22:00');
+console.log('✓ search, statistics, daily report, settings (new/day, shuffle, report time)');
+
+// 18. daily report is sent automatically, once, at the chosen time
+const b2 = sent.length;
+await tg.tick(at(22, 0)); await tg.tick(at(22, 0));
+assert.equal(sent.slice(b2).filter((s) => /Bugungi hisobot/.test(s.text ?? '')).length, 1); console.log('✓ daily report sent once at 22:00');
+
+// 19. a command cancels a pending question; menu works
+await cb('sr'); await msg('/menu');
+assert.match(last('sendMessage').text, /Asosiy menyu/);
+const { rows: [lk3] } = await q('select state from telegram_links where user_id=$1', [user.id]);
+assert.equal(lk3.state.input, null);
+await cb('dk:not-a-uuid'); // malformed ids are ignored
+console.log('✓ commands cancel pending input; menu; malformed ids ignored');
+
 await q('delete from users where id=$1', [user.id]);
 console.log('\nALL TELEGRAM TESTS PASSED');
 process.exit(0);

@@ -156,7 +156,9 @@ fun MathView(text: String, modifier: Modifier, size: TextUnit, weight: FontWeigh
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 setBackgroundColor(AColor.TRANSPARENT)
                 settings.javaScriptEnabled = true
-                settings.allowFileAccess = true
+                settings.allowFileAccess = true // offline card images are file:// URIs in app storage
+                @Suppress("DEPRECATION") settings.allowFileAccessFromFileURLs = false
+                @Suppress("DEPRECATION") settings.allowUniversalAccessFromFileURLs = false
                 isVerticalScrollBarEnabled = false
                 addJavascriptInterface(object { @android.webkit.JavascriptInterface fun h(px: Int) { main.post { h = px } } }, "Android")
                 webViewClient = object : android.webkit.WebViewClient() {

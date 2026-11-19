@@ -79,7 +79,7 @@ export function FolderRow({ data, folder, onEdit }: { data: UserData; folder: Fo
   const { t } = useT();
   const nav = useNavigate();
   const decks = data.decks.filter((d) => d.folderId === folder.id && !d.parentId);
-  const due = todayCount(data, `folder:${folder.id}`);
+  const due = useMemo(() => todayCount(data, `folder:${folder.id}`), [data, folder.id]);
   return (
     <div className="card-surface group flex cursor-pointer items-center gap-3 rounded-[22px] p-3 pr-2 transition hover:bg-ink-900/[.03] dark:hover:bg-white/[.04]" onClick={() => nav(`/folder/${folder.id}`)}>
       <div className={cx('grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br text-2xl', COLORS[folder.color ?? 'violet'] ?? COLORS.violet)}>

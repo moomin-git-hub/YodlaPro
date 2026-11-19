@@ -2,10 +2,9 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Flame, Clock, CheckCircle2, CalendarClock, Play, ChevronRight, Sparkles, Layers, PartyPopper } from 'lucide-react';
 import { useData } from '../lib/store';
+import { buildQueue } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { getUser } from '../lib/auth';
-import { isDue } from '../lib/srs';
-import { todayCount } from '../lib/queue';
 import { dayCounts, streaks, todayStats, totalStudyMs, deckStats, forecast, lastNDays, fmtTime } from '../lib/stats';
 import { dayKey } from '../lib/srs';
 import { PUBLIC_DECKS } from '../lib/catalog';
@@ -18,11 +17,12 @@ export function Home() {
   const user = getUser();
   const s = useMemo(() => {
     const today = todayStats(d);
-    const activeIds = new Set(d.decks.filter((x) => !x.archived && x.algorithm !== 'fast').map((x) => x.id));
-    const activeCards = d.cards.filter((c) => activeIds.has(c.deckId) && !c.frozen);
-    const due = activeCards.filter((c) => isDue(c)).length;
-    const totalToday = todayCount(d, 'all');
-    const newAvail = Math.max(0, totalToday - due);
+    // same queue the Study screen builds (active decks only, frozen/archived/fast-review excluded, daily new limit)
+    const q = buildQueue(d, 'all', false);
+    const byId = new Map(d.cards.map((c) => [c.id, c]));
+    const srs = q.main.filter((x) => x.mode === 'srs');
+    const newAvail = srs.filter((x) => byId.get(x.id)?.status === 'new').length;
+    const due = srs.length - newAvail + q.learn.length;
     const learned = d.cards.filter((c) => c.status !== 'new').length;
     const counts = dayCounts(d);
     const week = lastNDays(7);
@@ -34,7 +34,7 @@ export function Home() {
     const owned = new Set(d.decks.map((x) => x.sourcePublicId));
     const cats = new Set(d.decks.map((x) => x.category));
     const recs = PUBLIC_DECKS.filter((p) => !owned.has(p.id)).sort((a, b) => Number(cats.has(b.category)) - Number(cats.has(a.category))).slice(0, 6);
-    return { today, due, newAvail, learned, weekly, week, st, decks, best, recs, fc: forecast(activeCards, 7), time: totalStudyMs(d) };
+    return { today, due, newAvail, learned, weekly, week, st, decks, best, recs, fc: forecast(d.cards.filter((c) => !c.frozen && d.decks.some((x) => x.id === c.deckId && !x.archived)), 7), time: totalStudyMs(d) };
   }, [d]);
 
   const h = new Date().getHours();
@@ -51,7 +51,7 @@ export function Home() {
           <p className="text-sm font-semibold opacity-55">{greet}</p>
           <h1 className="text-[26px] font-extrabold tracking-tight">{user?.name || 'Learner'} 👋</h1>
         </div>
-        <Link to="/stats" className="card-surface flex items-center gap-1.5 rounded-2xl px-3.5 py-2 font-extrabold text-orange-500" aria-label={`${t('streak')}: ${s.st.current}`}>
+        <Link to="/activity" className="card-surface flex items-center gap-1.5 rounded-2xl px-3.5 py-2 font-extrabold text-orange-500" aria-label={`${t('streak')}: ${s.st.current}`}>
           <Flame size={20} className={s.st.current ? 'fill-orange-400' : 'opacity-40'} />{s.st.current}
         </Link>
       </header>

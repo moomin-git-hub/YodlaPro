@@ -11,6 +11,8 @@ const SECRET = process.env.JWT_SECRET;
 if (!SECRET || SECRET.length < 32) throw new Error('JWT_SECRET must be set (at least 32 random characters)');
 const isEmail = (s) => typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim()) && s.length <= 254;
 const strong = (p) => typeof p === 'string' && p.length >= 8 && p.length <= 200 && /[A-Za-z]/.test(p) && /\d/.test(p);
+export const signToken = (u) => sign(u);
+export const publicUser = (u) => pub(u);
 const pub = (u) => ({ id: u.id, email: u.email, name: u.name, createdAt: new Date(u.created_at).getTime() });
 const sign = (u) => jwt.sign({ sub: u.id }, SECRET, { expiresIn: '60d' });
 
@@ -78,15 +80,15 @@ authRouter.post('/password', requireAuth, limiter, async (req, res) => {
   res.json({ ok: true });
 });
 
-function safeResetBase(req, redirect) {
+/** Where the reset link points: APP_URL, or the request's own host. A foreign `redirect` is ignored (no phishing links). */
+function resetBase(req, redirect) {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/[?#].*$/, '');
-  const fallback = `${req.protocol}://${req.get('host')}/`;
-  if (typeof redirect !== 'string' || !redirect) return fallback;
+  const own = `${req.protocol}://${req.get('host')}/`;
   try {
-    const u = new URL(redirect);
-    if (u.host === req.get('host')) return `${u.origin}${u.pathname}`;
-  } catch { /* ignore invalid URL */ }
-  return fallback;
+    const u = new URL(String(redirect ?? ''));
+    if (u.host === req.get('host') && /^https?:$/.test(u.protocol)) return `${u.origin}${u.pathname}`;
+  } catch { /* not a URL */ }
+  return own;
 }
 
 authRouter.post('/forgot', limiter, async (req, res) => {
@@ -94,21 +96,19 @@ authRouter.post('/forgot', limiter, async (req, res) => {
   if (!isEmail(email)) return res.status(400).json({ error: 'invalidEmail' });
   // Always answer the same way so the endpoint can't be used to discover accounts.
   res.json({ ok: true, emailEnabled: !!mailer });
+  // the answer is already sent: any error below must only be logged (never reach the Express error handler)
   try {
     const { rows } = await q('select id, email from users where email=$1', [email.trim().toLowerCase()]);
     if (!rows[0] || !mailer) return;
     const token = crypto.randomBytes(32).toString('base64url');
     const hash = crypto.createHash('sha256').update(token).digest('hex');
     await q("insert into password_resets (token_hash, user_id, expires_at) values ($1,$2, now() + interval '1 hour')", [hash, rows[0].id]);
-    const base = safeResetBase(req, redirect);
-    const link = `${base}?reset=${token}`;
+    const link = `${resetBase(req, redirect)}?reset=${token}`;
     await mailer.sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER, to: rows[0].email, subject: 'Yodla — reset your password',
       text: `Open this link within 1 hour to set a new password:\n${link}\n\nIf you didn't ask for this, ignore this email.`,
     });
-  } catch (e) {
-    console.error('forgot error', e.message);
-  }
+  } catch (e) { console.error('forgot error', e.message); }
 });
 
 authRouter.post('/reset', limiter, async (req, res) => {
@@ -122,8 +122,9 @@ authRouter.post('/reset', limiter, async (req, res) => {
 });
 
 authRouter.delete('/me', requireAuth, async (req, res) => {
-  const { rows } = await q('select key from files where user_id=$1', [req.userId]);
-  await Promise.allSettled(rows.map((r) => deleteObject(r.key)));
+  // the account's images/uploads live in object storage: remove them too (DB rows go with the cascade)
+  const { rows: files } = await q('select key from files where user_id=$1', [req.userId]);
   await q('delete from users where id=$1', [req.userId]);
+  Promise.allSettled(files.map((f) => deleteObject(f.key))).then((r) => { const bad = r.filter((x) => x.status === 'rejected').length; if (bad) console.error(`account delete: ${bad} objects left`); });
   res.json({ ok: true });
 });

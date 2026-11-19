@@ -19,9 +19,8 @@ publicRouter.get('/:id/cards', async (req, res) => {
 publicRouter.post('/', requireAuth, rateLimit({ windowMs: 60 * 60_000, max: 10 }), async (req, res) => {
   const { title, description = '', category = 'general', cover = '📘', color = 'violet', cards } = req.body ?? {};
   if (typeof title !== 'string' || !title.trim() || title.length > 100) return res.status(400).json({ error: 'titleRequired' });
-  const valid = Array.isArray(cards)
-    ? cards.filter((c) => typeof c?.front === 'string' && c.front.trim() && (typeof c?.back === 'string' && c.back.trim() || /\{\{c\d+::/.test(c.front)))
-    : [];
+  // a cloze card ({{c1::…}}) has no separate answer
+  const valid = Array.isArray(cards) ? cards.filter((c) => typeof c?.front === 'string' && c.front.trim() && ((typeof c.back === 'string' && c.back.trim()) || /\{\{c\d+::/.test(c.front))) : [];
   if (valid.length < 3 || valid.length > 2000) return res.status(400).json({ error: 'Need 3–2000 cards' });
   const id = await tx(async (c) => {
     const u = await c.query('select name from users where id=$1', [req.userId]);

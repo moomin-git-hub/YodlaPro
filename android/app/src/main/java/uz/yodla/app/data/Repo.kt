@@ -146,7 +146,8 @@ class Repo(val ctx: Context, val db: YodlaDb = YodlaDb.create(ctx)) {
     suspend fun addCards(deckId: String, drafts: List<DraftCard>): List<Card> {
         val t = now()
         val out = mutableListOf<Card>()
-        drafts.forEachIndexed { i, d ->
+        drafts.forEachIndexed { i, d0 ->
+            val d = d0.copy(front = cleanRich(d0.front), back = cleanRich(d0.back))
             val noteId = uid()
             if (d.type == CardType.CLOZE && Cloze.indices(d.front).isNotEmpty()) {
                 Cloze.indices(d.front).forEach { n ->
@@ -162,7 +163,8 @@ class Repo(val ctx: Context, val db: YodlaDb = YodlaDb.create(ctx)) {
      * Save a note (one or several sibling cards). Existing siblings keep their review progress;
      * removed cloze numbers / masks delete their cards.
      */
-    suspend fun saveNote(template: Card, reversed: Boolean? = null): List<Card> {
+    suspend fun saveNote(template0: Card, reversed: Boolean? = null): List<Card> {
+        val template = template0.copy(front = cleanRich(template0.front), back = cleanRich(template0.back))
         val t = now()
         val existing = dao.note(template.noteId)
         val keep = mutableListOf<Card>()

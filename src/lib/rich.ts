@@ -2,7 +2,24 @@ import DOMPurify from 'dompurify';
 import katex from 'katex';
 
 /** Card text can be legacy plain/markdown-ish text or HTML from the rich editor. */
-export const isHtml = (s: string) => /<\/?(b|i|u|s|strong|em|p|div|br|h[1-6]|ul|ol|li|sub|sup|span|code|pre|a|img|mark|font)\b/i.test(s);
+export const isHtml = (s: string) => /<\/?(b|i|u|s|strong|em|p|div|br|h[1-6]|ul|ol|li|sub|sup|span|code|pre|a|img|mark|font)\b|&(nbsp|amp|lt|gt|quot|#\d+);/i.test(s);
+
+/**
+ * Normalises an editor value before saving: the contenteditable leaves `&nbsp;` for typed spaces and
+ * trailing `<br>`/empty blocks. A value without real markup is stored as clean plain text ("olma", not "olma&nbsp;").
+ */
+export function cleanRich(s: string): string {
+  if (!s) return '';
+  let h = s.replace(/&nbsp;|\u00a0/g, ' ')
+    .replace(/(<div>\s*<br\s*\/?>\s*<\/div>|<p>\s*<br\s*\/?>\s*<\/p>|<br\s*\/?>|\s)+$/gi, '')
+    .replace(/^(<div>\s*<br\s*\/?>\s*<\/div>|<br\s*\/?>|\s)+/gi, '')
+    .trim();
+  if (!/<[a-z][^>]*>/i.test(h)) {
+    const plain = h.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+    if (!isHtml(plain)) return plain; // typed "<b>" literally? keep it escaped as HTML
+  }
+  return h;
+}
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

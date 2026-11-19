@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { X, Bookmark, AlertTriangle, Undo2, Volume2, Pencil, Trophy, Target, Clock, Lightbulb, MoreVertical, Hourglass } from 'lucide-react';
 import { useData, getData, review, undoReview, updateCard, addSession, algoFor, presetFor } from '../lib/store';
-import { buildQueue, nextCard, afterAnswer, requeue, queueSize, isEmpty, type StudyQueue, type QItem } from '../lib/queue';
+import { buildQueue, nextCard, afterAnswer, requeue, isEmpty, moreNew, type StudyQueue, type QItem } from '../lib/queue';
 import { CardMenu } from '../components/CardMenu';
+import { checkAnswer, type AnswerDiff } from '../lib/answer';
+import { Keyboard, Check, Flame } from 'lucide-react';
 import { useT } from '../lib/i18n';
-import { previewLabel, endOfToday } from '../lib/srs';
-import { fmtTime } from '../lib/stats';
+import { previewLabel, endOfToday, startOfDay } from '../lib/srs';
+import { fmtTime, streaks } from '../lib/stats';
 import { Button, IconButton, ProgressBar, Ring } from '../components/ui';
-import { cx } from '../lib/util';
+import { cx, isTyping } from '../lib/util';
 import { RichView } from '../components/RichEditor';
-import { clozeHtml, clozePlain, plainText } from '../lib/rich';
-import type { Card, Rating } from '../lib/types';
+import { clozeHtml, clozePlain, plainText, CLOZE } from '../lib/rich';
+import type { Card, Rating, UserData } from '../lib/types';
 
 function speak(text: string) {
   if (!('speechSynthesis' in window)) return;
@@ -36,6 +38,13 @@ export function Study() {
   const [waitUntil, setWaitUntil] = useState<number | null>(null);
   const [finished, setFinished] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [diff, setDiff] = useState<AnswerDiff | null>(null);
+  const [answered, setAnswered] = useState<string[]>([]); // card ids answered this session (done/total counter)
+  const [lastRating, setLastRating] = useState<Record<string, Rating>>({}); // previous answer, shown as a badge when the card comes back
+  // the streak celebration is shown once, at the end of the first session of the day
+  const [streakSeen, setStreakSeen] = useState(() => getData().reviews.some((r) => r.ts >= startOfDay(Date.now())));
   const [menu, setMenu] = useState(false);
   const [stats, setStats] = useState({ reviewed: 0, correct: 0, done: 0 });
   const [history, setHistory] = useState<Snap[]>([]);
@@ -43,6 +52,7 @@ export function Study() {
   const started = useRef(Date.now());
   const shownAt = useRef(Date.now());
   const saved = useRef(false);
+  const busy = useRef(false); // ignores a double click / key repeat while an answer is being saved
 
   /** Show the next card that is really due; learning cards wait for their step time. */
   const advance = useCallback((q: StudyQueue, force = false) => {
@@ -50,7 +60,7 @@ export function Study() {
     if (n.kind === 'show') { setCurrent(n.item); setQueue(n.queue); setWaitUntil(null); setFinished(false); }
     else if (n.kind === 'wait') { setCurrent(null); setQueue(q); setWaitUntil(n.until); setFinished(false); }
     else { setCurrent(null); setQueue(q); setWaitUntil(null); setFinished(true); }
-    setFlipped(false); shownAt.current = Date.now();
+    setFlipped(false); setTyping(false); setTyped(''); setDiff(null); shownAt.current = Date.now();
   }, []);
   useEffect(() => { if (!empty) advance(queue); /* first card */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -60,23 +70,23 @@ export function Study() {
   const deck = data.decks.find((x) => x.id === target);
   const cardDeck = card ? data.decks.find((x) => x.id === card.deckId) : undefined;
   const title = target.startsWith('folder:') ? (data.folders.find((f) => f.id === target.slice(7))?.name ?? '') : target === 'all' ? t('study') : target === 'difficult' ? t('difficultCards') : target === 'bookmarks' ? t('bookmarks') : deck?.title ?? '';
-  const left = queueSize(queue) + (current ? 1 : 0);
-
-  const statsRef = useRef(stats);
-  statsRef.current = stats;
-  const deckIdRef = useRef(deck ? deck.id : null);
-  deckIdRef.current = deck ? deck.id : null;
 
   const finish = useCallback(() => {
-    const cur = statsRef.current;
-    if (saved.current || cur.reviewed === 0) return;
+    if (saved.current || stats.reviewed === 0) return;
     saved.current = true;
     const end = Date.now();
-    addSession({ deckId: deckIdRef.current, startedAt: started.current, endedAt: end, durationMs: end - started.current, cardsReviewed: cur.reviewed, correct: cur.correct });
-  }, []);
+    addSession({ deckId: deck ? deck.id : null, startedAt: started.current, endedAt: end, durationMs: end - started.current, cardsReviewed: stats.reviewed, correct: stats.correct });
+  }, [deck, stats]);
 
   useEffect(() => { if (done) finish(); }, [done, finish]);
-  useEffect(() => () => { finish(); }, [finish]);
+  // leaving the screen any other way (browser Back, a nav link, closing the tab) still records the session
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  useEffect(() => {
+    const h = () => finishRef.current();
+    addEventListener('pagehide', h);
+    return () => { removeEventListener('pagehide', h); finishRef.current(); };
+  }, []);
   useEffect(() => { if (item && !card) advance(queue); }, [item, card, queue, advance]); // deleted meanwhile
   // waiting for a learning card: count down, then continue automatically
   useEffect(() => {
@@ -86,7 +96,8 @@ export function Study() {
   }, [waitUntil, queue, advance]);
 
   const rate = useCallback((r: Rating) => {
-    if (!card || !item || !flipped) return;
+    if (!card || !item || !flipped || busy.current) return;
+    busy.current = true;
     setHistory((h) => [...h.slice(-50), { prev: item.mode === 'practice' ? null : card, queue, current: item, stats }]);
     let q = queue;
     if (item.mode === 'practice') { if (r === 1) q = requeue(q, item); }
@@ -94,10 +105,12 @@ export function Study() {
     else {
       review(card.id, r, Date.now() - shownAt.current);
       const updated = getData().cards.find((c) => c.id === card.id);
-      if (updated) q = afterAnswer(q, updated, endOfToday());
+      if (updated) q = afterAnswer(q, updated, endOfToday(), Date.now());
     }
     setStats((s) => ({ reviewed: s.reviewed + 1, correct: s.correct + (r >= 3 ? 1 : 0), done: s.done + 1 }));
+    setAnswered((a) => [...a, card.id]); setLastRating((m) => ({ ...m, [card.id]: r }));
     advance(q);
+    setTimeout(() => { busy.current = false; }, 0);
     if (navigator.vibrate) navigator.vibrate(8);
   }, [card, item, flipped, queue, stats, advance]);
 
@@ -105,6 +118,7 @@ export function Study() {
     const last = history[history.length - 1];
     if (!last) return;
     if (last.prev) undoReview(last.prev);
+    setAnswered((a) => a.slice(0, -1));
     setHistory((h) => h.slice(0, -1));
     setQueue(last.queue); setCurrent(last.current); setStats(last.stats); setWaitUntil(null); setFinished(false); setFlipped(false);
     saved.current = false;
@@ -114,13 +128,21 @@ export function Study() {
   const rev = card?.cardType === 'reverse';
   const qText = card ? (rev ? card.back : card.front) : '';
   const aText = card ? (rev ? card.front : card.back) : '';
+  const typeTarget = !card ? '' : card.cardType === 'cloze'
+    ? [...card.front.matchAll(CLOZE)].filter((m) => +m[1] === ((() => { try { return JSON.parse(card.extra || '{}').c ?? 1; } catch { return 1; } })())).map((m) => plainText(m[2])).join(' ')
+    : card.cardType === 'occlusion' ? '' : plainText(aText).trim();
+  const reveal = useCallback(() => {
+    if (flipped) return;
+    if (typing || typed.trim()) setDiff(checkAnswer(typed, typeTarget));
+    setTyping(false); setFlipped(true);
+  }, [flipped, typing, typed, typeTarget]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null; if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable || menu) return;
+      if (isTyping(e) || menu || typing) return;
       if (e.key === 'Escape') return exit();
       if (done || !card) return;
-      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setFlipped((f) => !f); }
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!flipped) reveal(); else if (data.settings.flipCards) setFlipped(false); }
       else if (['1', '2', '3', '4'].includes(e.key)) rate(Number(e.key) as Rating);
       else if (e.key.toLowerCase() === 'z') undo();
       else if (e.key.toLowerCase() === 'b') updateCard(card.id, { bookmarked: !card.bookmarked });
@@ -129,7 +151,7 @@ export function Study() {
     };
     addEventListener('keydown', h);
     return () => removeEventListener('keydown', h);
-  }, [rate, undo, exit, done, card, flipped, menu, qText, aText]);
+  }, [rate, undo, exit, done, card, flipped, menu, qText, aText, typing, reveal, data.settings.flipCards]);
 
   const algo = item?.mode === 'srs' ? algoFor(cardDeck) : 'fast';
   const now0 = useMemo(() => Date.now(), [card?.id, card?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -137,20 +159,23 @@ export function Study() {
 
   if (waitUntil != null) {
     const sec = Math.max(0, Math.ceil((waitUntil - Date.now()) / 1000));
+    const more = moreNew(data, target, new Set([...queue.main.map((x) => x.id), ...queue.learn.map((x) => x.id)]));
     return (
       <div className="mx-auto flex min-h-full max-w-md animate-fade flex-col items-center justify-center px-6 py-10 text-center">
         <div className="absolute left-4 top-4"><IconButton label={t('exitStudy')} onClick={exit}><X size={24} /></IconButton></div>
         <Ring value={1 - Math.min(1, sec / 600)} size={150} stroke={12}><div><Hourglass className="mx-auto mb-1 text-brand-500" size={24} /><div className="text-3xl font-extrabold tabular-nums">{Math.floor(sec / 60)}:{String(sec % 60).padStart(2, '0')}</div></div></Ring>
         <h1 className="mt-6 text-2xl font-extrabold">{t('waitTitle')}</h1>
         <p className="mt-2 text-sm opacity-60">{t('waitSub', { n: queue.learn.length })}</p>
-        <div className="mt-8 flex w-full gap-3">
+        {more.length > 0 && <Button size="lg" block className="mt-8" onClick={() => advance({ ...queue, main: [...more, ...queue.main] })}>{t('learnMoreNew', { n: more.length })}</Button>}
+        <div className={cx('flex w-full gap-3', more.length ? 'mt-3' : 'mt-8')}>
           <Button variant="secondary" size="lg" block onClick={() => { setWaitUntil(null); setFinished(true); }}>{t('finishSession')}</Button>
-          <Button size="lg" block onClick={() => advance(queue, true)}>{t('studyNow')}</Button>
+          <Button variant={more.length ? 'secondary' : undefined} size="lg" block onClick={() => advance(queue, true)}>{t('studyNow')}</Button>
         </div>
       </div>
     );
   }
 
+  const moreNow = empty ? moreNew(data, target, new Set()) : [];
   if (empty) {
     return (
       <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center px-6 text-center">
@@ -159,13 +184,16 @@ export function Study() {
         <p className="mt-2 opacity-60">{t('allCaughtUpSub')}</p>
         <div className="mt-8 flex w-full gap-3">
           <Button variant="secondary" block onClick={() => nav(-1)}>{t('backToDeck')}</Button>
-          <Button block onClick={() => { const q = buildQueue(getData(), target, true); if (!isEmpty(q)) { setEmpty(false); advance(q); } }} disabled={isEmpty(buildQueue(data, target, true))}>{t('practice')}</Button>
+          <Button variant={moreNow.length ? 'secondary' : undefined} block onClick={() => { const q = buildQueue(getData(), target, true); if (!isEmpty(q)) { setEmpty(false); advance(q); } }} disabled={isEmpty(buildQueue(data, target, true))}>{t('practice')}</Button>
         </div>
+        {moreNow.length > 0 && <Button size="lg" block className="mt-3" onClick={() => { setEmpty(false); advance({ main: moreNow, learn: [] }); }}>{t('learnMoreNew', { n: moreNow.length })}</Button>}
       </div>
     );
   }
 
+  if (done && !streakSeen) return <StreakScreen data={data} onContinue={() => setStreakSeen(true)} />;
   if (done) {
+    const todayN = new Set(data.reviews.filter((r) => r.ts >= startOfDay(Date.now())).map((r) => r.cardId)).size;
     const acc = stats.reviewed ? Math.round((stats.correct / stats.reviewed) * 100) : 0;
     return (
       <div className="mx-auto flex min-h-full max-w-md animate-fade flex-col items-center justify-center px-6 py-10 text-center">
@@ -173,7 +201,7 @@ export function Study() {
           <div className="absolute inset-0 animate-pulse rounded-full bg-brand-500/20 blur-2xl" />
           <Ring value={acc / 100} size={150} stroke={14}><div><Trophy className="mx-auto mb-1 text-amber-500" size={30} /><div className="text-3xl font-extrabold">{acc}%</div></div></Ring>
         </div>
-        <h1 className="text-[28px] font-extrabold">{t('sessionComplete')}</h1>
+        <h1 className="text-[26px] font-extrabold leading-tight">{t('reviewedToday', { n: todayN })}</h1>
         <p className="mt-1 opacity-60">{title}</p>
         <div className="mt-8 grid w-full grid-cols-3 gap-3">
           <Summary icon={<Target size={18} />} label={t('reviewed')} value={stats.reviewed} />
@@ -182,7 +210,7 @@ export function Study() {
         </div>
         <div className="mt-8 flex w-full gap-3">
           {history.length > 0 && <IconButton label={t('undo')} onClick={undo} className="card-surface h-12 w-12 shrink-0 rounded-2xl"><Undo2 size={20} /></IconButton>}
-          <Button variant="secondary" size="lg" block onClick={() => { saved.current = false; started.current = Date.now(); const q = buildQueue(getData(), target, false); setStats({ reviewed: 0, correct: 0, done: 0 }); setHistory([]); advance(isEmpty(q) ? buildQueue(getData(), target, true) : q); }}>{t('studyMore')}</Button>
+          <Button variant="secondary" size="lg" block onClick={() => { saved.current = false; started.current = Date.now(); const q0 = buildQueue(getData(), target, false); const q = isEmpty(q0) ? { main: moreNew(getData(), target, new Set()), learn: [] } : q0; setStats({ reviewed: 0, correct: 0, done: 0 }); setHistory([]); setAnswered([]); setLastRating({}); advance(isEmpty(q) ? buildQueue(getData(), target, true) : q); }}>{t('studyMore')}</Button>
           <Button size="lg" block onClick={() => nav(-1)}>{t('backToDeck')}</Button>
         </div>
       </div>
@@ -194,7 +222,12 @@ export function Study() {
   const faces = card.cardType === 'cloze'
     ? { cloze: true, q: clozeHtml(card.front, clozeIdx, false), a: clozeHtml(card.front, clozeIdx, true) }
     : { cloze: false, q: qText, a: aText };
-  const progress = (stats.done / Math.max(1, stats.done + left)) * 100;
+  const inSession = new Set([...queue.main.map((x) => x.id), ...queue.learn.map((x) => x.id), ...(current ? [current.id] : [])]);
+  // Noji counter: every answered card counts (Again/Hard too); cards coming back do not add to the total
+  const doneSet = new Set(answered);
+  const doneCards = doneSet.size, totalCards = doneCards + [...inSession].filter((id) => !doneSet.has(id)).length;
+  const progress = (doneCards / Math.max(1, totalCards)) * 100;
+  const flipMode = !!data.settings.flipCards;
   const occ = card.cardType === 'occlusion' ? (() => { try { return JSON.parse(card.extra || '{}') as { masks?: { id: string; x: number; y: number; w: number; h: number }[]; t?: string; mode?: string }; } catch { return {}; } })() : null;
   const ratingBtns: { r: Rating; label: string; cls: string }[] = [
     { r: 1, label: t('again'), cls: 'bg-rose-500 shadow-rose-500/30' },
@@ -207,17 +240,21 @@ export function Study() {
     <div className="mx-auto flex h-full max-w-xl flex-col px-4 pb-4 pt-3 safe-bottom sm:pt-6">
       <div className="flex items-center gap-2">
         <IconButton label={t('exitStudy')} onClick={exit}><X size={24} /></IconButton>
-        <div className="flex-1"><ProgressBar value={progress} /><p className="mt-1 truncate text-center text-[11px] font-bold opacity-50">{title} · {t('remaining', { n: left })}</p></div>
-        <IconButton label={t('undo')} onClick={undo} disabled={!history.length} className="disabled:opacity-25"><Undo2 size={20} /></IconButton>
+        <div className="flex flex-1 flex-col items-center gap-1.5">
+          <span className="rounded-full bg-ink-900/[.06] px-3.5 py-0.5 text-sm font-extrabold tabular-nums dark:bg-white/10">{doneCards}/{totalCards}</span>
+          <div className="w-full"><ProgressBar value={progress} /></div>
+          <p className="truncate text-center text-[11px] font-bold opacity-50">{title}</p>
+        </div>
         <IconButton label="Menu" onClick={() => setMenu(true)}><MoreVertical size={20} /></IconButton>
       </div>
       {item?.mode === 'practice' && <p className="mt-2 text-center text-xs font-semibold text-amber-600 dark:text-amber-400">{t('practiceMode')}</p>}
       {item?.mode === 'fast' && <p className="mt-2 text-center text-xs font-semibold text-sky-600 dark:text-sky-400">{t('algoFast')}</p>}
       <CardMenu card={card} data={data} open={menu} onClose={() => setMenu(false)} onGone={() => advance(queue)} onEdit={finish} />
 
+      {flipMode ? (
       <div className={cx('flip relative my-4 flex-1', flipped && 'flipped')} style={{ minHeight: 340 }}>
         <div className="flip-inner h-full">
-          <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) setFlipped(true); }} aria-label={t('tapToReveal')} className="flip-face card-surface flex h-full w-full cursor-pointer flex-col rounded-[32px] p-6 text-left">
+          <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) reveal(); }} aria-label={t('tapToReveal')} className="flip-face card-surface flex h-full w-full cursor-pointer flex-col rounded-[32px] p-6 text-left">
             <CardTop card={card} />
             <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto py-4 text-center">
               {occ ? <><RichView html={card.front} className="mb-3 w-full text-lg font-bold" /><Occlusion image={card.image} occ={occ} revealed={false} /></> : <>
@@ -242,10 +279,43 @@ export function Study() {
         </div>
       </div>
 
-      {!flipped ? (
-        <Button size="lg" block className="h-16 text-lg" onClick={() => setFlipped(true)}>{t('showAnswer')}</Button>
       ) : (
+        <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) reveal(); }} className="card-surface relative my-4 flex min-h-[340px] flex-1 cursor-pointer flex-col overflow-hidden rounded-[32px] p-6 text-left">
+          <CardTop card={card} />
+          {!flipped ? (
+            <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto py-4 text-center">
+              {occ ? <><RichView html={card.front} className="mb-3 w-full text-lg font-bold" /><Occlusion image={card.image} occ={occ} revealed={false} /></> : <>
+                {card.image && <img src={card.image} alt="" className="mb-4 max-h-44 rounded-2xl object-contain" />}
+                <RichView html={faces.q} className="w-full text-[26px] font-extrabold leading-snug" />
+              </>}
+            </div>
+          ) : (
+              <div className="flex flex-1 animate-fade flex-col justify-center overflow-y-auto py-3">
+              {occ ? <Occlusion image={card.image} occ={occ} revealed /> : faces.cloze ? <RichView html={faces.a} className="text-center text-[22px] font-bold leading-snug" /> : <>
+                <RichView html={qText} className="text-center text-base font-semibold opacity-50" />
+                <div className="mx-auto my-4 h-px w-16 bg-ink-900/10 dark:bg-white/10" />
+              </>}
+              {(!(faces.cloze || occ) || card.back) && <RichView html={occ ? card.back : faces.a} className={cx('text-center leading-snug', faces.cloze || occ ? 'mt-4 text-base' : 'text-[24px] font-extrabold text-brand-600 dark:text-brand-300')} />}
+              {card.example && <div className="mt-5 rounded-2xl bg-ink-900/[.04] p-4 text-[15px] italic leading-relaxed dark:bg-white/5">“{card.example}”</div>}
+              {card.explanation && <div className="mt-3 flex gap-2 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:bg-amber-500/10 dark:text-amber-100"><Lightbulb size={18} className="mt-0.5 shrink-0" />{card.explanation}</div>}
+            </div>
+          )}
+        </div>
+      )}
+      {!flipped ? (typing ? (
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); reveal(); }}>
+          <input autoFocus className="input h-14 flex-1 text-lg" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t('typeAnswer')} autoCapitalize="off" autoComplete="off" spellCheck={false} />
+          <button type="submit" aria-label={t('checkAnswer')} className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-500 text-white"><Check size={22} /></button>
+        </form>
+      ) : (
+        <div className="flex items-center gap-2">
+          {typeTarget ? <button aria-label={t('typeAnswer')} onClick={() => setTyping(true)} className="grid h-14 w-14 place-items-center rounded-full bg-brand-500/15 text-brand-600 dark:text-brand-300"><Keyboard size={22} /></button> : <span className="w-14" />}
+          <button onClick={reveal} className="h-16 flex-1 rounded-2xl text-lg font-bold hover:bg-ink-900/5 dark:hover:bg-white/5">{t('tapToShow')}</button>
+          <button aria-label={t('undo')} onClick={undo} disabled={!history.length} className="grid h-14 w-14 place-items-center rounded-full bg-ink-900/[.06] disabled:opacity-30 dark:bg-white/10"><Undo2 size={20} /></button>
+        </div>
+      )) : (
         <div className="animate-fade">
+          {diff && <TypedResult diff={diff} />}
           <p className="mb-2 text-center text-xs font-bold uppercase tracking-wide opacity-45">{t('howWell')}</p>
           <div className="grid grid-cols-4 gap-2">
             {ratingBtns.map((b) => (
@@ -263,7 +333,9 @@ export function Study() {
   function CardTop({ card }: { card: Card }) {
     return (
       <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-        <span className={cx('rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase', card.status === 'new' ? 'bg-sky-500/10 text-sky-600 dark:text-sky-300' : 'bg-amber-500/10 text-amber-600 dark:text-amber-300')}>{t(card.status === 'new' ? 'newCards' : card.status === 'review' ? 'review' : 'learning')}</span>
+        {lastRating[card.id] === 1 || lastRating[card.id] === 2 ? (
+          <span aria-label={t(lastRating[card.id] === 1 ? 'again' : 'hard')} className={cx('grid h-11 w-11 place-items-center rounded-2xl text-2xl font-extrabold', lastRating[card.id] === 1 ? 'bg-rose-500/15 text-rose-500' : 'bg-amber-500/15 text-amber-500')}>{lastRating[card.id] === 1 ? <X size={24} /> : '~'}</span>
+        ) : <span className={cx('rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase', card.status === 'new' ? 'bg-sky-500/10 text-sky-600 dark:text-sky-300' : 'bg-amber-500/10 text-amber-600 dark:text-amber-300')}>{t(card.status === 'new' ? 'newCards' : card.status === 'review' ? 'review' : 'learning')}</span>}
         <div className="-mr-2 flex">
           {data.settings.tts && <span role="button" tabIndex={0} aria-label={t('listen')} onClick={() => speak(plainText(flipped ? faces.a || clozePlain(card.front) : faces.q))} className="grid h-9 w-9 place-items-center rounded-xl opacity-50 hover:bg-ink-900/5 hover:opacity-100"><Volume2 size={18} /></span>}
           <span role="button" tabIndex={0} aria-label={t('edit')} onClick={() => { finish(); nav(`/card/${card.id}/edit`); }} className="grid h-9 w-9 place-items-center rounded-xl opacity-50 hover:bg-ink-900/5 hover:opacity-100"><Pencil size={17} /></span>
@@ -273,6 +345,44 @@ export function Study() {
       </div>
     );
   }
+}
+
+function TypedResult({ diff }: { diff: AnswerDiff }) {
+  const { t } = useT();
+  return (
+    <div className={cx('mb-3 rounded-2xl px-4 py-3', diff.correct ? 'bg-emerald-500/12' : 'bg-rose-500/12')}>
+      <p className={cx('text-sm font-extrabold', diff.correct ? 'text-emerald-600' : 'text-rose-600')}>{t(diff.correct ? 'answerCorrect' : 'answerWrong')}</p>
+      {diff.typed.length > 0 && <p className="text-lg font-bold">{diff.typed.map(([c, ok], i) => <span key={i} className={ok ? 'text-emerald-600' : 'text-rose-600 line-through'}>{c}</span>)}</p>}
+      {!diff.correct && <p className="text-lg">→ {diff.expected.map(([c, ok], i) => <span key={i} className={ok ? '' : 'font-extrabold text-amber-600 underline'}>{c}</span>)}</p>}
+    </div>
+  );
+}
+
+/** Noji-style streak celebration: flame, day count and this week's studied days. */
+function StreakScreen({ data, onContinue }: { data: UserData; onContinue: () => void }) {
+  const { t, locale } = useT();
+  const cur = streaks(data).current;
+  const studied = new Set(data.reviews.map((r) => startOfDay(r.ts)));
+  const today = startOfDay(Date.now());
+  const sunday = startOfDay(today - new Date(today).getDay() * 86_400_000 + 43_200_000);
+  const week = Array.from({ length: 7 }, (_, i) => startOfDay(sunday + i * 86_400_000 + 43_200_000));
+  return (
+    <div className="mx-auto flex min-h-full max-w-md flex-col items-center px-6 py-10 text-center">
+      <div className="flex-1" />
+      <div className="flex animate-[pop_.5s_cubic-bezier(.3,1.6,.5,1)] items-center gap-2"><Flame size={84} className="text-amber-500" /><span className="text-8xl font-extrabold">{cur}</span></div>
+      <p className="mt-2 text-2xl font-bold opacity-60">{t('dayStreak')}</p>
+      <div className="mt-10 grid w-full grid-cols-7 gap-1">
+        {week.map((d) => (
+          <div key={d} className="flex flex-col items-center gap-2">
+            <span className="text-sm font-semibold">{new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(d)}</span>
+            <span className={cx('grid h-10 w-10 place-items-center rounded-full', studied.has(d) && 'bg-amber-500/35 font-extrabold', d === today && 'ring-2 ring-amber-500')}>{new Date(d).getDate()}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex-[1.2]" />
+      <Button size="lg" block className="h-16 text-lg" onClick={onContinue}>{t('continueLabel')}</Button>
+    </div>
+  );
 }
 
 type Occ = { masks?: { id: string; x: number; y: number; w: number; h: number }[]; t?: string; mode?: string };
