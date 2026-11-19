@@ -166,6 +166,9 @@ const cardOf = async (front) => (await q(`select * from flashcards where user_id
 await msg('book - kitob | I read a book. | ot, sanaladigan');
 let bk = await cardOf('book');
 assert.equal(bk.back, 'kitob'); assert.equal(bk.example, 'I read a book.'); assert.equal(bk.explanation, 'ot, sanaladigan');
+await msg('grape - uzum - I like grapes. - meva');
+const gr = await cardOf('grape');
+assert.equal(gr.back, 'uzum'); assert.equal(gr.example, 'I like grapes.'); assert.equal(gr.explanation, 'meva');
 await msg('pen - ruchka\nmisol: Give me a pen.\nizoh: yozish quroli\ncup - piyola');
 const pen = await cardOf('pen'), cup = await cardOf('cup');
 assert.equal(pen.example, 'Give me a pen.'); assert.equal(pen.explanation, 'yozish quroli'); assert.equal(cup.back, 'piyola');

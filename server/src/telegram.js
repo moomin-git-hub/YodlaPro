@@ -20,7 +20,7 @@ export const telegramEnabled = !!TOKEN;
 // ---------------- texts ----------------
 const T = {
   uz: {
-    hello: (n) => `Salom${n ? ', ' + n : ''}! 👋 Men <b>Yodla</b> botiman.\n\n▶️ /oqish — kartalarni shu yerda takrorlash\n⚡ /test — 5 ta so'zli mini-test\n➕ So'z qo'shish: <code>apple - olma | misol | izoh</code> deb yozing yoki /qoshish, yoki rasm 📷 / ovozli xabar 🎤 / matn yuboring — AI karta yasaydi\n📊 /hisobot — PDF, Excel, Word hisobot\n🎯 /maqsad 600 — oylik maqsad\n🏆 /reyting — haftalik reyting\n🗂 /decklar — decklar va kartalarni boshqarish\n📅 /bugun — bugungi hisobot\n🔎 /qidir so‘z — qidirish\n⚙️ /sozlamalar — eslatmalar va boshqalar`,
+    hello: (n) => `Salom${n ? ', ' + n : ''}! 👋 Men <b>Yodla</b> botiman.\n\n▶️ /oqish — kartalarni shu yerda takrorlash\n⚡ /test — 5 ta so'zli mini-test\n➕ So'z qo'shish: <code>apple - olma - misol - izoh</code> deb yozing yoki /qoshish, yoki rasm 📷 / ovozli xabar 🎤 / matn yuboring — AI karta yasaydi\n📊 /hisobot — PDF, Excel, Word hisobot\n🎯 /maqsad 600 — oylik maqsad\n🏆 /reyting — haftalik reyting\n🗂 /decklar — decklar va kartalarni boshqarish\n📅 /bugun — bugungi hisobot\n🔎 /qidir so‘z — qidirish\n⚙️ /sozlamalar — eslatmalar va boshqalar`,
     notLinked: `Avval Yodla hisobingizni ulang:\nIlova → <b>Profil → Telegram'ni ulash</b>.\n\nHisobingiz bo'lmasa — ilovani oching 👇`,
     linked: (n) => `✅ Hisob ulandi: <b>${n}</b>\n\nEndi kartalaringizni shu yerda takrorlashingiz mumkin.`,
     badCode: `Bu havola eskirgan. Ilovada <b>Telegram'ni ulash</b> tugmasini qayta bosing.`,
@@ -45,7 +45,7 @@ const T = {
     unlinked: 'Hisob uzildi.', help: 'Yordam: /start',
   },
   en: {
-    hello: (n) => `Hi${n ? ', ' + n : ''}! 👋 I'm the <b>Yodla</b> bot.\n\n▶️ /study — review your cards right here\n⚡ /test — 5-word mini test\n➕ Add words: type <code>apple - olma | example | explanation</code> or /add, or send a photo 📷 / voice 🎤 / text — AI makes cards\n📊 /report — PDF, Excel, Word reports\n🎯 /goal 600 — monthly goal\n🏆 /top — weekly ranking\n🗂 /decks — manage decks and cards\n📅 /today — today’s report\n🔎 /search word — find cards\n⚙️ /settings — reminders and more`,
+    hello: (n) => `Hi${n ? ', ' + n : ''}! 👋 I'm the <b>Yodla</b> bot.\n\n▶️ /study — review your cards right here\n⚡ /test — 5-word mini test\n➕ Add words: type <code>apple - olma - example - explanation</code> or /add, or send a photo 📷 / voice 🎤 / text — AI makes cards\n📊 /report — PDF, Excel, Word reports\n🎯 /goal 600 — monthly goal\n🏆 /top — weekly ranking\n🗂 /decks — manage decks and cards\n📅 /today — today’s report\n🔎 /search word — find cards\n⚙️ /settings — reminders and more`,
     notLinked: `Connect your Yodla account first:\nApp → <b>Profile → Connect Telegram</b>.\n\nNo account yet? Open the app 👇`,
     linked: (n) => `✅ Account connected: <b>${n}</b>\n\nYou can now review your cards here.`,
     badCode: `This link has expired. Tap <b>Connect Telegram</b> in the app again.`,
@@ -70,7 +70,7 @@ const T = {
     unlinked: 'Account disconnected.', help: 'Help: /start',
   },
   ru: {
-    hello: (n) => `Привет${n ? ', ' + n : ''}! 👋 Я бот <b>Yodla</b>.\n\n▶️ /study — повторять карточки прямо здесь\n⚡ /test — мини-тест из 5 слов\n➕ Добавить слова: напишите <code>apple - яблоко | пример | пояснение</code> или /add, или отправьте фото 📷 / голосовое 🎤 / текст — ИИ сделает карточки\n📊 /report — отчёты PDF, Excel, Word\n🎯 /goal 600 — цель на месяц\n🏆 /top — рейтинг недели\n🗂 /decks — колоды и карточки\n📅 /today — отчёт за день\n🔎 /search слово — поиск\n⚙️ /settings — напоминания и другое`,
+    hello: (n) => `Привет${n ? ', ' + n : ''}! 👋 Я бот <b>Yodla</b>.\n\n▶️ /study — повторять карточки прямо здесь\n⚡ /test — мини-тест из 5 слов\n➕ Добавить слова: напишите <code>apple - яблоко - пример - пояснение</code> или /add, или отправьте фото 📷 / голосовое 🎤 / текст — ИИ сделает карточки\n📊 /report — отчёты PDF, Excel, Word\n🎯 /goal 600 — цель на месяц\n🏆 /top — рейтинг недели\n🗂 /decks — колоды и карточки\n📅 /today — отчёт за день\n🔎 /search слово — поиск\n⚙️ /settings — напоминания и другое`,
     notLinked: `Сначала подключите аккаунт Yodla:\nПриложение → <b>Профиль → Подключить Telegram</b>.\n\nНет аккаунта? Откройте приложение 👇`,
     linked: (n) => `✅ Аккаунт подключён: <b>${n}</b>\n\nТеперь можно повторять карточки здесь.`,
     badCode: `Ссылка устарела. Нажмите <b>Подключить Telegram</b> в приложении ещё раз.`,
@@ -498,7 +498,7 @@ const WZ = ['front', 'back', 'example', 'explanation'];
 async function wizardInput(link, t, chatId, input, value) {
   const card = { ...input.card };
   if (input.step === 'front') {
-    const one = parseLine(value); // the whole card typed in one line: "apple - olma | example | explanation"
+    const one = parseLine(value); // the whole card typed in one line: "apple - olma - example - explanation"
     if (one) return wizardSave(link, t, chatId, input.deckId, one);
     card.front = value;
   } else card[input.step] = value === '-' && input.step !== 'back' ? '' : value;
@@ -603,12 +603,14 @@ async function onInput(link, t, chatId, input, text) {
   if (input.k === 'search') return doSearch(link, t, chatId, null, text);
 }
 
-/** "front - back | example | explanation" (example and explanation optional). */
+/** "front - back - example - explanation" ("|" also works) (example and explanation optional). */
 function parseLine(line) {
-  const [head, ...rest] = String(line).split('|');
-  const m = head.match(PAIR);
-  if (!m) return null;
-  return { front: m[1].trim(), back: m[2].trim(), example: (rest[0] ?? '').trim(), explanation: rest.slice(1).join('|').trim() };
+  const str = String(line);
+  const parts = str.includes('|') ? str.split('|') : str.split(/\s+[-–—=]\s+/);
+  const m = parts.length > 1 && str.includes('|') ? parts[0].match(PAIR) : null;
+  const [front, back, example, ...xp] = m ? [m[1], m[2], parts[1], ...parts.slice(2)] : parts;
+  if (!front || !back || !front.trim() || !back.trim()) return null;
+  return { front: front.trim(), back: back.trim(), example: (example ?? '').trim(), explanation: xp.join(' - ').trim() };
 }
 const LABEL_EX = /^\s*(misol|example|ex|пример|e\.g\.)\s*[:：-]\s*(.+)$/i;
 const LABEL_XP = /^\s*(izoh|explanation|note|izohi|пояснение|объяснение|примечание)\s*[:：-]\s*(.+)$/i;
