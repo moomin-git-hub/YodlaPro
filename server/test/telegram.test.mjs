@@ -180,6 +180,12 @@ const { rows: [rv] } = await q(`select back, example from flashcards where user_
 assert.equal(rv.back, 'qovun'); assert.equal(rv.example, 'I like melon.');
 await cb('set:reverse'); await msg('kiwi - kivi'); assert.equal(await revCnt('kiwi'), 0);
 console.log('✓ reverse cards');
+// reverse in one line (+r) and in the wizard toggle
+await msg('grape2 - uzum2 - Nice grapes. +r'); assert.equal(await revCnt('grape2'), 1);
+await msg('/qoshish'); await cb('wzr'); await msg('plum'); await msg('olxo\'ri'); await cb('wzs'); await cb('wzs'); assert.equal(await revCnt('plum'), 1);
+await msg('/teskari'); await msg('fig - anjir'); assert.equal(await revCnt('fig'), 1); await msg('/teskari');
+console.log('✓ reverse: +r flag, wizard toggle, /teskari');
+
 await msg('pen - ruchka\nmisol: Give me a pen.\nizoh: yozish quroli\ncup - piyola');
 const pen = await cardOf('pen'), cup = await cardOf('cup');
 assert.equal(pen.example, 'Give me a pen.'); assert.equal(pen.explanation, 'yozish quroli'); assert.equal(cup.back, 'piyola');

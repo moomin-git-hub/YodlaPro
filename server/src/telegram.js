@@ -117,7 +117,7 @@ const T2 = {
     stats: (s) => `📊 <b>Statistika</b>\n\n📚 Kartalar: <b>${s.all}</b> (🆕 ${s.new} · 📖 ${s.learning} · 🏆 ${s.mastered})\n🔥 Seriya: <b>${s.streak}</b> kun (eng uzun: ${s.best})\n\n<b>Oxirgi 7 kun</b>\n${s.week}\n\n🗓 7 kunda: ${s.reviews} ta takror · ${s.acc}% aniqlik · ${s.learnedNew} ta yangi so‘z`,
     daily: (d) => `📅 <b>Bugungi hisobot</b>\n\n🔁 Takrorlar: <b>${d.reviews}</b> (${d.cards} ta karta)\n🆕 Yangi so‘zlar: <b>${d.learnedNew}</b>\n🎯 Aniqlik: <b>${d.acc}%</b>\n⏱ Vaqt: <b>${d.minutes}</b> daqiqa\n🔥 Seriya: <b>${d.streak}</b> kun${d.hard ? `\n\n😓 <b>Qiyin bo‘lganlar:</b>\n${d.hard}` : ''}\n\n📆 Ertaga: <b>${d.tomorrow}</b> ta takror kutadi.`,
     dailyNone: (d) => `📅 <b>Bugungi hisobot</b>\n\nBugun hali o‘qimadingiz. 🔥 Seriya: <b>${d.streak}</b> kun.\n⏰ Hozir <b>${d.due}</b> ta karta kutyapti.`,
-    revLabel: '🔁 Teskari karta', revNA: 'Cloze kartalarda teskari karta bo‘lmaydi.', dailyReport: 'Kunlik hisobot', newPerDay: (n) => `🆕 Kuniga yangi so‘z: ${n}`, shuffle: 'Aralashtirish', fmtHelp: 'Bir qatorda: <code>savol - javob | misol | izoh</code>',
+    revLabel: '🔁 Teskari karta', revNA: 'Cloze kartalarda teskari karta bo‘lmaydi.', dailyReport: 'Kunlik hisobot', newPerDay: (n) => `🆕 Kuniga yangi so‘z: ${n}`, shuffle: 'Aralashtirish', fmtHelp: 'Bir qatorda: <code>savol - javob - misol - izoh +r</code> (<code>+r</code> = 🔁 teskari karta)\n<code>savol - javob | misol | izoh</code>',
   },
   en: {
     menu: '🏠 <b>Main menu</b>', mDecks: '🗂 Decks', mAdd: '➕ Add card', mSearch: '🔎 Search', mStats: '📊 Statistics', mToday: '📅 Today’s report', mReports: '📄 Reports', mSettings: '⚙️ Settings', mMenu: '🏠 Menu',
@@ -139,7 +139,7 @@ const T2 = {
     stats: (s) => `📊 <b>Statistics</b>\n\n📚 Cards: <b>${s.all}</b> (🆕 ${s.new} · 📖 ${s.learning} · 🏆 ${s.mastered})\n🔥 Streak: <b>${s.streak}</b> days (best: ${s.best})\n\n<b>Last 7 days</b>\n${s.week}\n\n🗓 7 days: ${s.reviews} reviews · ${s.acc}% accuracy · ${s.learnedNew} new words`,
     daily: (d) => `📅 <b>Today’s report</b>\n\n🔁 Reviews: <b>${d.reviews}</b> (${d.cards} cards)\n🆕 New words: <b>${d.learnedNew}</b>\n🎯 Accuracy: <b>${d.acc}%</b>\n⏱ Time: <b>${d.minutes}</b> min\n🔥 Streak: <b>${d.streak}</b> days${d.hard ? `\n\n😓 <b>Hard today:</b>\n${d.hard}` : ''}\n\n📆 Tomorrow: <b>${d.tomorrow}</b> reviews waiting.`,
     dailyNone: (d) => `📅 <b>Today’s report</b>\n\nYou haven’t studied today yet. 🔥 Streak: <b>${d.streak}</b> days.\n⏰ <b>${d.due}</b> cards are waiting now.`,
-    revLabel: '🔁 Reverse card', revNA: 'Cloze cards have no reverse.', dailyReport: 'Daily report', newPerDay: (n) => `🆕 New words per day: ${n}`, shuffle: 'Shuffle', fmtHelp: 'One line: <code>question - answer | example | explanation</code>',
+    revLabel: '🔁 Reverse card', revNA: 'Cloze cards have no reverse.', dailyReport: 'Daily report', newPerDay: (n) => `🆕 New words per day: ${n}`, shuffle: 'Shuffle', fmtHelp: 'One line: <code>question - answer - example - explanation +r</code> (<code>+r</code> = 🔁 reverse card)',
   },
   ru: {
     menu: '🏠 <b>Главное меню</b>', mDecks: '🗂 Колоды', mAdd: '➕ Добавить карточку', mSearch: '🔎 Поиск', mStats: '📊 Статистика', mToday: '📅 Отчёт за день', mReports: '📄 Отчёты', mSettings: '⚙️ Настройки', mMenu: '🏠 Меню',
@@ -161,7 +161,7 @@ const T2 = {
     stats: (s) => `📊 <b>Статистика</b>\n\n📚 Карточек: <b>${s.all}</b> (🆕 ${s.new} · 📖 ${s.learning} · 🏆 ${s.mastered})\n🔥 Серия: <b>${s.streak}</b> дн. (рекорд: ${s.best})\n\n<b>Последние 7 дней</b>\n${s.week}\n\n🗓 За 7 дней: ${s.reviews} повторений · ${s.acc}% точность · ${s.learnedNew} новых слов`,
     daily: (d) => `📅 <b>Отчёт за день</b>\n\n🔁 Повторений: <b>${d.reviews}</b> (${d.cards} карточек)\n🆕 Новых слов: <b>${d.learnedNew}</b>\n🎯 Точность: <b>${d.acc}%</b>\n⏱ Время: <b>${d.minutes}</b> мин\n🔥 Серия: <b>${d.streak}</b> дн.${d.hard ? `\n\n😓 <b>Трудные сегодня:</b>\n${d.hard}` : ''}\n\n📆 Завтра: <b>${d.tomorrow}</b> повторений.`,
     dailyNone: (d) => `📅 <b>Отчёт за день</b>\n\nСегодня вы ещё не занимались. 🔥 Серия: <b>${d.streak}</b> дн.\n⏰ Сейчас ждут <b>${d.due}</b> карточек.`,
-    revLabel: '🔁 Обратная карточка', revNA: 'У cloze-карточек нет обратной.', dailyReport: 'Ежедневный отчёт', newPerDay: (n) => `🆕 Новых слов в день: ${n}`, shuffle: 'Перемешивать', fmtHelp: 'Одной строкой: <code>вопрос - ответ | пример | пояснение</code>',
+    revLabel: '🔁 Обратная карточка', revNA: 'У cloze-карточек нет обратной.', dailyReport: 'Ежедневный отчёт', newPerDay: (n) => `🆕 Новых слов в день: ${n}`, shuffle: 'Перемешивать', fmtHelp: 'Одной строкой: <code>вопрос - ответ - пример - пояснение +r</code> (<code>+r</code> = 🔁 обратная карточка)',
   },
 };
 for (const l of Object.keys(T)) Object.assign(T[l], T2[l]);
@@ -493,25 +493,33 @@ async function showCard(link, t, chatId, msg, cardId) {
 }
 
 // ---------------- adding cards: step by step ----------------
+const revOn = (link, card) => card?.reverse ?? !!link.prefs.reverse;
+/** Keyboard of a wizard step: skip / AI / reverse toggle / cancel. */
+function wzKb(link, t, step, card) {
+  const rows = [];
+  if (step !== 'front' && step !== 'back') rows.push([{ text: t.skip, callback_data: 'wzs' }, ...(aiConfigured() ? [{ text: t.aiFill, callback_data: 'wza' }] : [])]);
+  rows.push([{ text: `${revOn(link, card) ? '✅' : '⬜'} ${t.revLabel}`, callback_data: 'wzr' }]);
+  rows.push(cancelRow(t));
+  return kb(rows);
+}
 async function wizardStart(link, t, chatId, msg, deckId) {
   const deck = await targetDeck(link.user_id, deckId || link.prefs.deckId);
   await setInput(link.user_id, { k: 'wz', step: 'front', deckId: deck.id, card: {} });
-  return editOrSend(chatId, msg, { text: `${t.wFront(esc(deck.title))}\n\n💡 ${t.fmtHelp}`, ...kb([cancelRow(t)]) });
+  return editOrSend(chatId, msg, { text: `${t.wFront(esc(deck.title))}\n\n💡 ${t.fmtHelp}`, ...wzKb(link, t, 'front', {}) });
 }
 const WZ = ['front', 'back', 'example', 'explanation'];
 async function wizardInput(link, t, chatId, input, value) {
   const card = { ...input.card };
   if (input.step === 'front') {
-    const one = parseLine(value); // the whole card typed in one line: "apple - olma - example - explanation"
-    if (one) return wizardSave(link, t, chatId, input.deckId, one);
+    const one = parseLine(value); // the whole card typed in one line: "apple - olma - example - explanation +r"
+    if (one) return wizardSave(link, t, chatId, input.deckId, { ...one, reverse: one.reverse ?? card.reverse });
     card.front = value;
   } else card[input.step] = value === '-' && input.step !== 'back' ? '' : value;
   const next = WZ[WZ.indexOf(input.step) + 1];
   if (!next) return wizardSave(link, t, chatId, input.deckId, card);
   await setInput(link.user_id, { ...input, step: next, card });
   const prompt = { back: t.wBack, example: t.wEx, explanation: t.wXp }[next];
-  const rows = next === 'back' ? [cancelRow(t)] : [[{ text: t.skip, callback_data: 'wzs' }, ...(aiConfigured() ? [{ text: t.aiFill, callback_data: 'wza' }] : [])], cancelRow(t)];
-  return send(chatId, prompt, kb(rows));
+  return send(chatId, prompt, wzKb(link, t, next, card));
 }
 async function wizardSave(link, t, chatId, deckId, card, msg) {
   await setInput(link.user_id, null);
@@ -610,12 +618,14 @@ async function onInput(link, t, chatId, input, text) {
 
 /** "front - back - example - explanation" ("|" also works) (example and explanation optional). */
 function parseLine(line) {
-  const str = String(line);
+  const rvFlag = /\s+\+(r|t|rev|reverse|teskari)\s*$/i;
+  const rv = rvFlag.test(String(line));
+  const str = String(line).replace(rvFlag, '');
   const parts = str.includes('|') ? str.split('|') : str.split(/\s+[-–—=]\s+/);
   const m = parts.length > 1 && str.includes('|') ? parts[0].match(PAIR) : null;
   const [front, back, example, ...xp] = m ? [m[1], m[2], parts[1], ...parts.slice(2)] : parts;
   if (!front || !back || !front.trim() || !back.trim()) return null;
-  return { front: front.trim(), back: back.trim(), example: (example ?? '').trim(), explanation: xp.join(' - ').trim() };
+  return { front: front.trim(), back: back.trim(), example: (example ?? '').trim(), explanation: xp.join(' - ').trim(), ...(rv ? { reverse: true } : {}) };
 }
 const LABEL_EX = /^\s*(misol|example|ex|пример|e\.g\.)\s*[:：-]\s*(.+)$/i;
 const LABEL_XP = /^\s*(izoh|explanation|note|izohi|пояснение|объяснение|примечание)\s*[:：-]\s*(.+)$/i;
@@ -664,6 +674,10 @@ async function onMessage(m) {
   if (['/qoshish', '/add', '/karta', '/new', '/добавить'].includes(c)) {
     if (args.length) return addFromText(link, t, chatId, args.join(' '));
     return wizardStart(link, t, chatId);
+  }
+  if (['/teskari', '/reverse', '/obratnaya', '/обратная'].includes(c)) {
+    const v = !link.prefs.reverse; await setPrefs(link.user_id, { reverse: v });
+    return send(chatId, `${v ? '✅' : '⬜'} ${t.revLabel}: ${v ? 'ON' : 'OFF'}`, await menuKb(link, t));
   }
   if (['/qidir', '/search', '/find', '/poisk', '/поиск'].includes(c)) {
     if (args.length) return doSearch(link, t, chatId, null, args.join(' '));
@@ -776,6 +790,13 @@ async function onCallback(cb) {
   if (k === 'enrich') return enrich(link, t, chatId, link.state?.lastAdded ?? []);
   // add-card wizard
   if (k === 'wz') return wizardStart(link, t, chatId, msg, isUuid(a) ? a : undefined);
+  if (k === 'wzr') {
+    const input = link.state?.input;
+    if (input?.k !== 'wz') return null;
+    const card = { ...input.card, reverse: !revOn(link, input.card) };
+    await setInput(uid, { ...input, card });
+    return tg('editMessageReplyMarkup', { chat_id: chatId, message_id: msg.message_id, ...wzKb(link, t, input.step, card) }).catch(() => null);
+  }
   if (k === 'wzs' || k === 'wza') {
     const input = link.state?.input;
     if (input?.k !== 'wz' || !input.card?.front) return null;
@@ -787,7 +808,7 @@ async function onCallback(cb) {
     const next = WZ[WZ.indexOf(input.step) + 1];
     if (!next) return wizardSave(link, t, chatId, input.deckId, input.card);
     await setInput(uid, { ...input, step: next });
-    return send(chatId, t.wXp, kb([[{ text: t.skip, callback_data: 'wzs' }, ...(aiConfigured() ? [{ text: t.aiFill, callback_data: 'wza' }] : [])], cancelRow(t)]));
+    return send(chatId, t.wXp, wzKb(link, t, next, input.card));
   }
   // search, stats, reports, settings
   if (k === 'sr') { await setInput(uid, { k: 'search' }); return send(chatId, t.askSearch, kb([cancelRow(t)])); }
