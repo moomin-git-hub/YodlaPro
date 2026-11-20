@@ -195,15 +195,22 @@ fun CardEditScreen(nav: NavHostController, id: String, deckArg: String?, typeArg
                 ToggleRow(Icons.Rounded.SwapHoriz, Brand, stringResource(R.string.alsoReversed), reversed) { reversed = it }
             }
             else -> {
-                FormatBar(type == CardType.CLOZE && focus == "front", onCloze = {
-                    val n = Cloze.nextIndex(front.text); insert("front", "{{c$n::", "}}", "…")
-                }) { b, a, p -> insert(focus, b, a, p) }
+                val canSwitch = card == null
+                fun makeBlank() {
+                    if (type == CardType.CLOZE) { val n = Cloze.nextIndex(front.text); insert("front", "{{c$n::", "}}", "…"); return }
+                    // basic -> cloze: answer becomes the blank
+                    val q = front.text.trim(); val a = back.text.trim()
+                    val t = when { a.isNotEmpty() && q.isNotEmpty() -> "$q\n{{c1::$a}}"; a.isNotEmpty() -> "{{c1::$a}}"; else -> q }
+                    front = TextFieldValue(t, TextRange(t.length)); back = TextFieldValue(""); type = CardType.CLOZE; errs = emptyMap(); focus = "front"
+                }
+                FormatBar(canSwitch || type == CardType.CLOZE, canSwitch, onCloze = { makeBlank() }, onOcc = { type = CardType.OCCLUSION; errs = emptyMap() }) { b, a, p -> insert(focus, b, a, p) }
                 OutlinedTextField(front, { front = it }, Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) focus = "front" },
                     label = { Text(stringResource(if (type == CardType.CLOZE) R.string.clozeText else R.string.front)) }, minLines = 3, isError = errs["front"] != null,
                     placeholder = { Text(stringResource(if (type == CardType.CLOZE) R.string.clozePh else R.string.frontPh)) }, shape = RoundedCornerShape(16.dp),
                     supportingText = { Text(errs["front"] ?: if (type == CardType.CLOZE) stringResource(R.string.clozeHelp, Cloze.indices(front.text).size) else "") },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
                 if (dup != null) Notice(stringResource(R.string.duplicateWarning), Amber)
+                if (type != CardType.CLOZE) FormatBar(canSwitch, canSwitch, onCloze = { makeBlank() }, onOcc = { type = CardType.OCCLUSION; errs = emptyMap() }) { b, a, p -> insert("back", b, a, p) }
                 OutlinedTextField(back, { back = it }, Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) focus = "back" },
                     label = { Text(stringResource(if (type == CardType.CLOZE) R.string.backExtra else R.string.back)) }, minLines = if (type == CardType.CLOZE) 2 else 3, isError = errs["back"] != null,
                     placeholder = { Text(stringResource(R.string.backPh)) }, shape = RoundedCornerShape(16.dp), supportingText = errs["back"]?.let { { Text(it) } })
@@ -280,9 +287,10 @@ fun ToggleRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color
 }
 
 @Composable
-private fun FormatBar(showCloze: Boolean, onCloze: () -> Unit, insert: (String, String, String) -> Unit) {
+private fun FormatBar(showCloze: Boolean, showOcc: Boolean, onCloze: () -> Unit, onOcc: () -> Unit, insert: (String, String, String) -> Unit) {
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (showCloze) FilledTonalButton(onCloze, shape = RoundedCornerShape(12.dp)) { Text("[…] " + stringResource(R.string.makeCloze), fontWeight = FontWeight.Bold) }
+        if (showOcc) FilledTonalButton(onOcc, shape = RoundedCornerShape(12.dp)) { Icon(Icons.Rounded.AddPhotoAlternate, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.imageOcclusion), fontWeight = FontWeight.Bold) }
         listOf(Triple(Icons.Rounded.FormatBold, "**", "**"), Triple(Icons.Rounded.FormatItalic, "*", "*"), Triple(Icons.Rounded.Code, "`", "`")).forEach { (ic, b, a) ->
             FilledTonalIconButton({ insert(b, a, "") }) { Icon(ic, null) }
         }

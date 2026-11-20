@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { X, Check, AlertCircle } from 'lucide-react';
 import { cx } from '../lib/util';
@@ -54,8 +55,8 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
     return () => window.removeEventListener('keydown', h);
   }, [open, onClose]);
   if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 animate-fade bg-ink-950/50 backdrop-blur-sm" onClick={onClose} />
       <div className={cx('relative max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] bg-white p-5 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up sm:animate-pop sm:rounded-[28px] dark:bg-ink-800', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}>
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-ink-200 sm:hidden dark:bg-white/10" />
@@ -67,7 +68,8 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
