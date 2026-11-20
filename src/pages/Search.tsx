@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search as SearchIcon, X } from 'lucide-react';
-import { useData } from '../lib/store';
+import { ArrowLeft, Search as SearchIcon, X, Repeat } from 'lucide-react';
+import { useData, noteRows } from '../lib/store';
 import { useT } from '../lib/i18n';
 import { plainText } from '../lib/rich';
 import { DeckCover, IconButton, useAutoFocus } from '../components/ui';
@@ -23,7 +23,7 @@ export function SearchPage() {
     const s = q.trim().toLowerCase();
     if (s.length < 1) return null;
     const decks = d.decks.filter((x) => `${x.title} ${x.description}`.toLowerCase().includes(s)).slice(0, 10);
-    const cards = d.cards.filter((c) => `${plainText(`${c.front} ${c.back}`)} ${c.example} ${c.explanation}`.toLowerCase().includes(s)).slice(0, 100);
+    const cards = noteRows(d.cards, (c) => `${plainText(`${c.front} ${c.back}`)} ${c.example} ${c.explanation}`.toLowerCase().includes(s)).slice(0, 100);
     return { decks, cards };
   }, [q, d]);
   const deckOf = (id: string) => d.decks.find((x) => x.id === id);
@@ -50,9 +50,9 @@ export function SearchPage() {
             )}
             {res.cards.length > 0 && (
               <section><h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider opacity-45">{res.cards.length} {t('cards')}</h2>
-                <ul className="space-y-2">{res.cards.map((c) => (
+                <ul className="space-y-2">{res.cards.map(({ card: c, rev }) => (
                   <li key={c.id}><Link to={`/card/${c.id}/edit`} className="card-surface block rounded-2xl p-3.5">
-                    <p className="font-bold"><Hl text={plainText(c.front)} q={q.trim()} /></p>
+                    <p className="flex items-center gap-1.5 font-bold"><Hl text={plainText(c.front)} q={q.trim()} />{rev && <span title={t('alsoReversed')} className="inline-flex shrink-0 rounded-md bg-brand-500/12 p-1 text-brand-600 dark:text-brand-300"><Repeat size={12} strokeWidth={3} /></span>}</p>
                     <p className="line-clamp-2 text-sm opacity-65"><Hl text={plainText(c.back)} q={q.trim()} /></p>
                     <p className="mt-1 text-[11px] font-semibold opacity-45">{deckOf(c.deckId)?.cover} {deckOf(c.deckId)?.title}</p>
                   </Link></li>

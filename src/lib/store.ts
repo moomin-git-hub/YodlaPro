@@ -297,6 +297,49 @@ export function saveBasicNote(card: Card, patch: Partial<Card>, reversed: boolea
   }
   set({ cards }, ops);
 }
+
+export type OccMask = { id: string; x: number; y: number; w: number; h: number };
+export type OccData = { masks: OccMask[]; mode: 'all' | 'one' };
+export const occOf = (c: Card): { masks: OccMask[]; t?: string; mode?: string } => { try { return JSON.parse(c.extra || '{}'); } catch { return { masks: [] }; } };
+
+/** Image-occlusion note: one card per mask (same data shape as Android: extra = {masks, mode, t}). */
+export function addOcclusion(deckId: string, d: { front?: string; back?: string; example?: string; explanation?: string; image: string }, occ: OccData): Card[] {
+  const t = now(), noteId = uid();
+  const cards: Card[] = occ.masks.map((m, i) => ({
+    ...newCardDefaults(), id: uid(), noteId, deckId, front: cleanRich(d.front ?? ''), back: cleanRich(d.back ?? ''), example: (d.example ?? '').trim(), explanation: (d.explanation ?? '').trim(),
+    image: d.image, difficult: false, bookmarked: false, cardType: 'occlusion', extra: JSON.stringify({ masks: occ.masks, mode: occ.mode, t: m.id }), due: t + i, createdAt: t + i, updatedAt: t,
+  }));
+  set({ cards: [...state.cards, ...cards] }, cards.map((c) => ({ t: 'up', table: 'flashcards', row: toRow(c) })));
+  return cards;
+}
+
+/** Saves an edited occlusion note: masks that stay keep their progress, new masks add cards, removed masks delete theirs. */
+export function saveOcclusionNote(card: Card, patch: Partial<Card>, occ: OccData) {
+  const t = now(), noteId = card.noteId ?? card.id, sib = noteOf(card);
+  const content: Partial<Card> = { front: cleanRich(patch.front ?? card.front), back: cleanRich(patch.back ?? card.back), example: patch.example ?? card.example, explanation: patch.explanation ?? card.explanation, image: patch.image ?? card.image, deckId: patch.deckId ?? card.deckId, difficult: patch.difficult ?? card.difficult, bookmarked: patch.bookmarked ?? card.bookmarked };
+  const keep: Card[] = occ.masks.map((m, k) => {
+    const ex = sib.find((x) => x.cardType === 'occlusion' && occOf(x).t === m.id);
+    return { ...(ex ?? { ...card, ...newCardDefaults(), id: uid(), createdAt: t + k }), ...content, noteId, cardType: 'occlusion', extra: JSON.stringify({ masks: occ.masks, mode: occ.mode, t: m.id }), updatedAt: t } as Card;
+  });
+  const keepIds = new Set(keep.map((k) => k.id)), sibIds = new Set(sib.map((x) => x.id)), ops: Op[] = [];
+  sib.filter((x) => !keepIds.has(x.id)).forEach((x) => ops.push({ t: 'del', table: 'flashcards', id: x.id }));
+  keep.forEach((k) => ops.push({ t: 'up', table: 'flashcards', row: toRow(k) }));
+  set({ cards: [...state.cards.filter((c) => !sibIds.has(c.id)), ...keep] }, ops);
+}
+
+/** A list row per note: the reverse card is stacked under its forward card (flagged with `rev`) instead of listed separately. */
+export type NoteRow = { card: Card; rev?: Card };
+export function noteRows(cards: Card[], match: (c: Card) => boolean = () => true): NoteRow[] {
+  const revOf = new Map<string, Card>();
+  cards.forEach((c) => { if (c.cardType === 'reverse') revOf.set(c.noteId || c.id, c); });
+  const out: NoteRow[] = [];
+  for (const c of cards) {
+    if (c.cardType === 'reverse') { const base = cards.some((x) => x.cardType !== 'reverse' && (x.noteId || x.id) === (c.noteId || c.id)); if (base) continue; }
+    const rev = c.cardType === 'reverse' ? undefined : revOf.get(c.noteId || c.id);
+    if (match(c) || (rev && match(rev))) out.push({ card: c, rev });
+  }
+  return out;
+}
 const clozeNo = (c: Card) => { try { return Number(JSON.parse(c.extra || '{}').c) || 1; } catch { return 1; } };
 
 /**

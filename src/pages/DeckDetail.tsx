@@ -3,12 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Settings as Cog, Brain, MoreVertical } from 'lucide-react';
 import { AlgorithmSheet } from './DeckSettings';
 import { CardMenu } from '../components/CardMenu';
-import { algoFor, notesOnly } from '../lib/store';
+import { algoFor, notesOnly, noteRows, type NoteRow } from '../lib/store';
 import { ArrowLeft, Play, Plus, Pencil, Download, Sparkles, Upload, Shuffle, Bookmark, AlertTriangle, CheckSquare, Trash2, RotateCcw, FolderInput, Globe, Dumbbell, Search, X, Inbox } from 'lucide-react';
 import { useData, updateCard, deleteCards, moveCards, resetProgress, updateSettings, deckTree } from '../lib/store';
 import { DeckTree } from '../components/DeckTree';
 import { plainText } from '../lib/rich';
-import { FolderTree, CornerLeftUp } from 'lucide-react';
+import { FolderTree, CornerLeftUp, Repeat } from 'lucide-react';
 import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
 import { deckStats } from '../lib/stats';
@@ -45,7 +45,7 @@ export function DeckDetail() {
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return cards.filter((c) => {
+    return noteRows(cards, (c) => {
       if (s && !plainText(`${c.front} ${c.back} ${c.example} ${c.explanation}`).toLowerCase().includes(s)) return false;
       switch (filter) {
         case 'new': return c.status === 'new';
@@ -67,7 +67,7 @@ export function DeckDetail() {
     else download(`${safe}.json`, JSON.stringify({ app: 'yodla', deck: { title: deck.title, description: deck.description, category: deck.category, cover: deck.cover, color: deck.color }, cards: notesOnly(cards).map(({ front, back, example, explanation }) => ({ front, back, example, explanation })) }, null, 2));
     setExportOpen(false);
   };
-  const toggle = (cid: string) => setSel((s) => { const n = new Set(s); n.has(cid) ? n.delete(cid) : n.add(cid); return n; });
+  const toggle = (r: NoteRow) => setSel((s) => { const n = new Set(s), on = n.has(r.card.id); for (const x of [r.card.id, r.rev?.id]) if (x) on ? n.delete(x) : n.add(x); return n; });
   const ids = [...(sel ?? [])];
   const toDo = useMemo(() => todayCount(d, id ?? ''), [d, id]);
   const hasDue = toDo > 0 || allCards.some((c) => c.status === 'new' && !c.frozen);
@@ -143,7 +143,7 @@ export function DeckDetail() {
           ))}
         </div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-bold opacity-55">{sel ? t('selected', { n: sel.size }) : `${shown.length} ${t('cards')}`}</span>
+          <span className="text-sm font-bold opacity-55">{sel ? t('selected', { n: shown.filter((r) => sel.has(r.card.id)).length }) : `${shown.length} ${t('cards')}`}</span>
           {cards.length > 0 && <Button size="sm" variant="ghost" icon={sel ? <X size={16} /> : <CheckSquare size={16} />} onClick={() => setSel(sel ? null : new Set())}>{sel ? t('cancel') : t('select')}</Button>}
         </div>
 
@@ -151,7 +151,7 @@ export function DeckDetail() {
           <Empty icon={<Inbox size={28} />} title={t('emptyDeck')} sub={t('emptyDeckSub')} action={<Button icon={<Plus size={18} />} onClick={() => nav(`/card/new?deck=${deck.id}`)}>{t('addCard')}</Button>} />
         ) : shown.length === 0 ? <p className="py-10 text-center text-sm opacity-50">{t('noResults')}</p> : (
           <ul className="space-y-2">
-            {shown.slice(0, 400).map((c) => <CardRow key={c.id} c={c} sel={sel} toggle={toggle} onMenu={() => setMenuCard(c)} />)}
+            {shown.slice(0, 400).map((r) => <CardRow key={r.card.id} c={r.card} rev={r.rev} sel={sel} toggle={() => toggle(r)} onMenu={() => setMenuCard(r.card)} />)}
           </ul>
         )}
       </section>
@@ -167,7 +167,7 @@ export function DeckDetail() {
       )}
 
       <AlgorithmSheet deck={deck} open={algoOpen} onClose={() => setAlgoOpen(false)} />
-      <CardMenu card={menuCard} data={d} open={!!menuCard} onClose={() => setMenuCard(null)} onSelect={() => menuCard && setSel(new Set([menuCard.id]))} />
+      <CardMenu card={menuCard} data={d} open={!!menuCard} onClose={() => setMenuCard(null)} onSelect={() => menuCard && setSel(new Set([menuCard.id, ...cards.filter((x) => x.cardType === 'reverse' && (x.noteId || x.id) === (menuCard.noteId || menuCard.id)).map((x) => x.id)]))} />
       <Sheet open={moveOpen} onClose={() => setMoveOpen(false)} title={t('chooseDeck')}>
         <div className="space-y-2">
           {d.decks.filter((x) => x.id !== deck.id).map((x) => (
@@ -192,7 +192,7 @@ function QuickAction({ icon, label, onClick }: { icon: React.ReactNode; label: s
   return <button onClick={onClick} className="card-surface flex flex-col items-center gap-1.5 rounded-3xl py-3.5 text-xs font-bold transition active:scale-95"><span className="text-brand-500 dark:text-brand-300">{icon}</span>{label}</button>;
 }
 
-function CardRow({ c, sel, toggle, onMenu }: { c: Card; sel: Set<string> | null; toggle: (id: string) => void; onMenu: () => void }) {
+function CardRow({ c, rev, sel, toggle, onMenu }: { c: Card; rev?: Card; sel: Set<string> | null; toggle: () => void; onMenu: () => void }) {
   const { t } = useT();
   const status = c.status === 'new' ? ['newCards', 'bg-sky-500'] : isMastered(c) ? ['mastered', 'bg-emerald-500'] : ['learning', 'bg-amber-500'];
   const inner = (
@@ -200,7 +200,7 @@ function CardRow({ c, sel, toggle, onMenu }: { c: Card; sel: Set<string> | null;
       {sel && <span className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-lg border-2', sel.has(c.id) ? 'border-brand-500 bg-brand-500 text-white' : 'border-ink-900/20 dark:border-white/20')}>{sel.has(c.id) && '✓'}</span>}
       {c.image && <img src={c.image} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-bold">{c.cardType === 'reverse' && <span className="mr-1 text-brand-500">⇄</span>}{c.frozen && <span className="mr-1">❄</span>}{plainText(c.cardType === 'reverse' ? c.back : c.front) || '🖼'}</p>
+        <p className="flex items-center gap-1.5 text-[15px] font-bold">{c.frozen && <span>❄</span>}<span className="truncate">{plainText(c.cardType === 'reverse' ? c.back : c.front) || (c.cardType === 'occlusion' ? t('imageOcclusion') : '🖼')}</span>{(rev || c.cardType === 'reverse') && <span title={t('alsoReversed')} aria-label={t('alsoReversed')} className="inline-flex shrink-0 items-center rounded-md bg-brand-500/12 p-1 text-brand-600 dark:text-brand-300"><Repeat size={12} strokeWidth={3} /></span>}</p>
         <p className="truncate text-sm opacity-60">{plainText(c.cardType === 'reverse' ? c.front : c.back)}</p>
         <p className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold opacity-60">
           <span className={cx('h-1.5 w-1.5 rounded-full', status[1])} />{t(status[0] as 'newCards')}
@@ -211,7 +211,7 @@ function CardRow({ c, sel, toggle, onMenu }: { c: Card; sel: Set<string> | null;
   );
   return (
     <li className="card-surface flex items-center gap-1 rounded-2xl pr-1">
-      {sel ? <button onClick={() => toggle(c.id)} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">{inner}</button>
+      {sel ? <button onClick={toggle} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">{inner}</button>
         : <Link to={`/card/${c.id}/edit`} className="flex min-w-0 flex-1 items-center gap-3 p-3">{inner}</Link>}
       {!sel && (
         <>

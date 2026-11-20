@@ -184,7 +184,7 @@ fun SearchScreen(nav: NavHostController) {
             res.first.isEmpty() && res.second.isEmpty() -> item { Text(stringResource(R.string.noResults), Modifier.fillMaxWidth().padding(48.dp), style = Muted) }
             else -> {
                 if (res.first.isNotEmpty()) { item { SectionTitle(stringResource(R.string.decks)) }; items(res.first, key = { "d" + it.id }) { DeckRow(it, Stats.deck(d.cardsOf(it.id))) { nav.go("deck/${it.id}") } } }
-                if (res.second.isNotEmpty()) { item { SectionTitle("${res.second.size} ${stringResource(R.string.cards)}") }; items(res.second, key = { it.id }) { c -> CardRow(c, null, { nav.go("card/${c.id}") }, deckLabel = d.deck(c.deckId)?.let { "${it.cover} ${it.title}" }) } }
+                if (res.second.isNotEmpty()) { item { SectionTitle("${res.second.size} ${stringResource(R.string.cards)}") }; items(res.second.filter { r -> r.type != CardType.REVERSE || res.second.none { it.type != CardType.REVERSE && it.noteId == r.noteId } }, key = { it.id }) { c -> CardRow(c, null, { nav.go("card/${c.id}") }, hasReverse = res.second.any { it.type == CardType.REVERSE && it.noteId == c.noteId } && c.type != CardType.REVERSE, deckLabel = d.deck(c.deckId)?.let { "${it.cover} ${it.title}" }) } }
             }
         }
     }

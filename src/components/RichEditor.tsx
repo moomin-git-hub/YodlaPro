@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Bold, Italic, Underline, Strikethrough, Heading, List, ListOrdered, Subscript, Superscript, Sigma, Code, Link2, ImagePlus, Highlighter, Baseline, Sparkles, Code2, Eraser } from 'lucide-react';
-import { sanitize, isHtml, toDisplayHtml } from '../lib/rich';
+import { Bold, Italic, Underline, Strikethrough, Heading, List, ListOrdered, Subscript, Superscript, Sigma, Code, Link2, ImagePlus, Highlighter, Baseline, Sparkles, Code2, Eraser, Undo2, Redo2, Brackets, ScanSearch } from 'lucide-react';
+import { sanitize, isHtml, toDisplayHtml, clozeIndices } from '../lib/rich';
 import { compressImage, cx } from '../lib/util';
 import { storeImage } from '../lib/api';
 import { useT } from '../lib/i18n';
@@ -11,13 +11,26 @@ const MARKS = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa', 'transpare
 
 type AiAction = 'answer' | 'question' | 'example' | 'explanation' | 'improve';
 
+function Btn({ label, on, children, active }: { label: string; on: () => void; children: ReactNode; active?: boolean }) {
+  return (
+    <button type="button" title={label} aria-label={label} onMouseDown={(e) => e.preventDefault()} onClick={on}
+      className={cx('grid h-9 w-9 shrink-0 place-items-center rounded-xl transition hover:bg-ink-900/5 dark:hover:bg-white/10', active && 'bg-brand-500/15 text-brand-600 dark:text-brand-300')}>
+      {children}
+    </button>
+  );
+}
+
 /**
  * WYSIWYG card editor (Noji-style toolbar). Value is sanitized HTML.
  * Legacy plain-text values are converted on first edit.
  */
-export function RichEditor({ value, onChange, placeholder, minHeight = 120, error, autoFocus, onAi, big }: {
+export function RichEditor({ value, onChange, placeholder, minHeight = 120, error, autoFocus, onAi, onCloze, onOcclusion, occActive, big }: {
   value: string; onChange: (html: string) => void; placeholder?: string; minHeight?: number; error?: boolean; autoFocus?: boolean;
   onAi?: (a: AiAction) => Promise<void>; big?: boolean;
+  /** shows the “make blank” button; called after a {{cN::…}} blank was inserted around the selection */
+  onCloze?: () => void;
+  /** shows the “image occlusion” button (switches the card to image occlusion; occActive = already in that mode) */
+  onOcclusion?: () => void; occActive?: boolean;
 }) {
   const { t } = useT();
   const ref = useRef<HTMLDivElement>(null);
@@ -66,6 +79,14 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
     const block = document.queryCommandValue('formatBlock').toLowerCase();
     cmd('formatBlock', block === 'h3' ? 'div' : 'h3');
   };
+  const makeCloze = () => {
+    restoreSel();
+    const txt = getSelection()?.toString() ?? '';
+    const used = clozeIndices(ref.current?.innerText ?? '');
+    const n = (used.length ? Math.max(...used) : 0) + 1;
+    insertHtml(`{{c${n}::${(txt || '…').replace(/&/g, '&amp;').replace(/</g, '&lt;')}}}`);
+    onCloze?.();
+  };
   const wrapCode = () => {
     restoreSel();
     const s = getSelection();
@@ -73,13 +94,6 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
     if (txt.includes('\n')) insertHtml(`<pre><code>${txt.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code></pre><div><br></div>`);
     else insertHtml(`<code>${(txt || 'code').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>&nbsp;`);
   };
-
-  const Btn = ({ label, on, children, active }: { label: string; on: () => void; children: ReactNode; active?: boolean }) => (
-    <button type="button" title={label} aria-label={label} onMouseDown={(e) => e.preventDefault()} onClick={on}
-      className={cx('grid h-9 w-9 shrink-0 place-items-center rounded-xl transition hover:bg-ink-900/5 dark:hover:bg-white/10', active && 'bg-brand-500/15 text-brand-600 dark:text-brand-300')}>
-      {children}
-    </button>
-  );
 
   return (
     <div className={cx('relative overflow-visible rounded-2xl border bg-white transition focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-500/15 dark:bg-ink-900', error ? 'border-rose-400' : 'border-ink-200 dark:border-white/10')}>
@@ -105,11 +119,16 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
             if (html) { e.preventDefault(); insertHtml(sanitize(html).replace(/ style="[^"]*"/g, '')); }
           }}
           onKeyDown={(e) => {
+            if (onCloze && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); keepSel(); makeCloze(); return; }
             if ((e.metaKey || e.ctrlKey) && !e.shiftKey && ['b', 'i', 'u'].includes(e.key.toLowerCase())) { e.preventDefault(); cmd(e.key.toLowerCase() === 'b' ? 'bold' : e.key.toLowerCase() === 'i' ? 'italic' : 'underline'); }
           }}
         />
       )}
       <div className="no-scrollbar flex items-center gap-0.5 overflow-x-auto border-t border-ink-200/70 px-1.5 py-1 text-ink-900/80 dark:border-white/5 dark:text-white/80">
+        {onCloze && <button type="button" title={t('makeCloze')} onMouseDown={(e) => e.preventDefault()} onClick={() => { keepSel(); makeCloze(); }} className="flex h-9 shrink-0 items-center gap-1 rounded-xl bg-brand-500/12 px-2.5 text-xs font-extrabold text-brand-600 transition hover:bg-brand-500/20 dark:text-brand-300"><Brackets size={16} />{t('makeCloze')}</button>}
+        {onOcclusion && <button type="button" title={t('imageOcclusion')} onMouseDown={(e) => e.preventDefault()} onClick={onOcclusion} className={cx('flex h-9 shrink-0 items-center gap-1 rounded-xl px-2.5 text-xs font-extrabold transition', occActive ? 'bg-brand-500 text-white' : 'bg-brand-500/12 text-brand-600 hover:bg-brand-500/20 dark:text-brand-300')}><ScanSearch size={16} />{t('imageOcclusion')}</button>}
+        <Btn label="Undo" on={() => cmd('undo')}><Undo2 size={18} /></Btn>
+        <Btn label="Redo" on={() => cmd('redo')}><Redo2 size={18} /></Btn>
         {onAi && <Btn label="AI" on={() => { keepSel(); setPop(pop === 'ai' ? '' : 'ai'); }}><Sparkles size={18} className="text-fuchsia-500" /></Btn>}
         <Btn label={t('addImage')} on={() => { keepSel(); fileRef.current?.click(); }}><ImagePlus size={18} /></Btn>
         <Btn label={t('highlight')} on={() => { keepSel(); setPop(pop === 'mark' ? '' : 'mark'); }}><Highlighter size={18} /></Btn>

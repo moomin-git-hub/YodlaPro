@@ -87,12 +87,20 @@ fun DeckScreen(nav: NavHostController, id: String) {
 
     if (deck == null) { Column(Modifier.padding(16.dp)) { PageHeader("", onBack = { nav.popBackStack() }); EmptyState(Icons.Rounded.Inbox, stringResource(R.string.notFound)) }; return }
 
+    val revIdOf = remember(cards) { cards.filter { it.type == CardType.REVERSE }.associate { it.noteId to it.id } }
+    fun groupIds(c: Card) = listOfNotNull(c.id, if (c.type != CardType.REVERSE) revIdOf[c.noteId] else null)
     val shown = remember(cards, q, filter, sort) {
         val s = q.trim().lowercase()
-        cards.filter { c ->
-            (s.isEmpty() || "${c.front} ${c.back} ${c.example} ${c.explanation}".lowercase().contains(s)) && when (filter) {
+        val noteKeys = cards.filter { it.type != CardType.REVERSE }.map { it.noteId }.toSet()
+        val revOf = cards.filter { it.type == CardType.REVERSE }.associateBy { it.noteId }
+        fun hit(c: Card) = (s.isEmpty() || "${c.front} ${c.back} ${c.example} ${c.explanation}".lowercase().contains(s)) && when (filter) {
                 "new" -> c.status == Status.NEW; "learning" -> c.status != Status.NEW && !Srs.isMastered(c); "mastered" -> Srs.isMastered(c)
                 "difficult" -> Srs.isHard(c); "bookmarked" -> c.bookmarked; "frozen" -> c.frozen; "due" -> Srs.isDue(c); else -> true
+            }
+        cards.filter { c ->
+            when {
+                c.type == CardType.REVERSE -> c.noteId !in noteKeys && hit(c) // orphan reverse card: show it, otherwise it is stacked under its forward card
+                else -> hit(c) || revOf[c.noteId]?.let { hit(it) } == true
             }
         }.let { l ->
             when (sort) {
@@ -185,7 +193,7 @@ fun DeckScreen(nav: NavHostController, id: String) {
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (sel != null) stringResource(R.string.selected, sel!!.size) else "${shown.size} ${stringResource(R.string.cards)}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    Text(if (sel != null) stringResource(R.string.selected, shown.count { sel!!.contains(it.id) }) else "${shown.size} ${stringResource(R.string.cards)}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                     var sortMenu by remember { mutableStateOf(false) }
                     Box {
                         TextButton({ sortMenu = true }) { Icon(Icons.Rounded.Sort, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.sort)) }
@@ -196,16 +204,16 @@ fun DeckScreen(nav: NavHostController, id: String) {
                         }
                     }
                     if (cards.isNotEmpty()) TextButton({ sel = if (sel == null) emptySet() else null }) { Text(stringResource(if (sel != null) R.string.cancel else R.string.select)) }
-                    if (sel != null) TextButton({ sel = shown.map { it.id }.toSet() }) { Text(stringResource(R.string.all)) }
+                    if (sel != null) TextButton({ sel = shown.flatMap { groupIds(it) }.toSet() }) { Text(stringResource(R.string.all)) }
                 }
             }
             if (cards.isEmpty()) item {
                 EmptyState(Icons.Rounded.Inbox, stringResource(R.string.emptyDeck), stringResource(R.string.emptyDeckSub)) { PrimaryButton(stringResource(R.string.addCard), { nav.go("card/new?deck=${deck.id}") }, icon = Icons.Rounded.Add) }
             } else if (shown.isEmpty()) item { Text(stringResource(R.string.noResults), Modifier.fillMaxWidth().padding(32.dp), textAlign = TextAlign.Center, style = Muted) }
             items(shown.take(600), key = { it.id }) { c ->
-                CardRow(c, sel?.contains(c.id),
-                    onClick = { if (sel != null) sel = sel!!.toMutableSet().apply { if (!add(c.id)) remove(c.id) } else nav.go("card/${c.id}") },
-                    onLong = { if (sel != null) sel = sel!! + c.id else actionsFor = c },
+                CardRow(c, sel?.contains(c.id), hasReverse = revIdOf.containsKey(c.noteId) && c.type != CardType.REVERSE,
+                    onClick = { if (sel != null) sel = sel!!.toMutableSet().apply { val g = groupIds(c); if (contains(c.id)) removeAll(g.toSet()) else addAll(g) } else nav.go("card/${c.id}") },
+                    onLong = { if (sel != null) sel = sel!! + groupIds(c) else actionsFor = c },
                     onBookmark = { scope.launch { repo.updateCard(c.id) { it.copy(bookmarked = !it.bookmarked) } } },
                     onDifficult = { scope.launch { repo.updateCard(c.id) { it.copy(difficult = !it.difficult) } } })
             }
@@ -270,7 +278,7 @@ private fun BulkBtn(icon: ImageVector, label: String, tint: Color, onClick: () -
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CardRow(c: Card, selected: Boolean?, onClick: () -> Unit, onLong: () -> Unit = {}, onBookmark: (() -> Unit)? = null, onDifficult: (() -> Unit)? = null, deckLabel: String? = null) {
+fun CardRow(c: Card, selected: Boolean?, onClick: () -> Unit, onLong: () -> Unit = {}, onBookmark: (() -> Unit)? = null, onDifficult: (() -> Unit)? = null, deckLabel: String? = null, hasReverse: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val (statusLabel, statusColor) = when { c.frozen -> R.string.frozen to Sky; c.status == Status.NEW -> R.string.newCards to Sky; Srs.isMastered(c) -> R.string.mastered to Emerald; else -> R.string.learning to Amber }
     Row(
@@ -283,7 +291,10 @@ fun CardRow(c: Card, selected: Boolean?, onClick: () -> Unit, onLong: () -> Unit
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (c.type != CardType.BASIC) Text(if (c.type == CardType.CLOZE) "[…] " else "🖼 ", color = Brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                Text(c.questionText().replace('\n', ' '), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(c.questionText().replace('\n', ' '), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (hasReverse || c.type == CardType.REVERSE) Box(Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(Brand.copy(alpha = 0.14f)).padding(3.dp)) {
+                    Icon(Icons.Rounded.SwapHoriz, stringResource(R.string.alsoReversed), Modifier.size(13.dp), tint = Brand)
+                }
             }
             Text(c.answerText().replace('\n', ' '), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
