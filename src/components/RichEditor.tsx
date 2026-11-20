@@ -62,19 +62,57 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
     last.current = html;
     onChange(html);
   };
+  const [on, setOn] = useState<Record<string, boolean>>({});
+  const root = useRef<HTMLDivElement>(null);
+  // keep the last selection inside the editor (toolbar buttons / popups need it) and light up the active formats
+  useEffect(() => {
+    const h = () => {
+      const sel = getSelection();
+      if (!sel || !sel.rangeCount || !ref.current?.contains(sel.anchorNode)) return;
+      saved.current = sel.getRangeAt(0).cloneRange();
+      const st = (c: string) => { try { return document.queryCommandState(c); } catch { return false; } };
+      let blk = ''; try { blk = document.queryCommandValue('formatBlock').toLowerCase(); } catch { /* */ }
+      setOn((o) => { const n = { bold: st('bold'), italic: st('italic'), underline: st('underline'), strike: st('strikeThrough'), ul: st('insertUnorderedList'), ol: st('insertOrderedList'), sub: st('subscript'), sup: st('superscript'), h: blk === 'h3' }; return Object.keys(n).every((k) => n[k as keyof typeof n] === o[k]) ? o : n; });
+    };
+    document.addEventListener('selectionchange', h);
+    return () => document.removeEventListener('selectionchange', h);
+  }, []);
+  // close colour / AI popups on outside click or Escape
+  useEffect(() => {
+    if (pop !== 'color' && pop !== 'mark' && pop !== 'ai') return;
+    const down = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node) || !(e.target as Element).closest('[data-pop]') && !(e.target as Element).closest('button')) setPop(''); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setPop(''); };
+    document.addEventListener('pointerdown', down); document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('pointerdown', down); document.removeEventListener('keydown', key); };
+  }, [pop]);
   const keepSel = () => { const s = getSelection(); if (s && s.rangeCount && ref.current?.contains(s.anchorNode)) saved.current = s.getRangeAt(0).cloneRange(); };
   const restoreSel = () => {
-    ref.current?.focus();
     const s = getSelection();
+    if (s && s.rangeCount && ref.current?.contains(s.anchorNode)) { ref.current?.focus({ preventScroll: true }); return; } // already inside: keep the live selection
+    ref.current?.focus({ preventScroll: true });
     if (saved.current && s) { s.removeAllRanges(); s.addRange(saved.current); }
   };
   const cmd = (c: string, v?: string) => {
     restoreSel();
     document.execCommand('styleWithCSS', false, c === 'hiliteColor' || c === 'foreColor' ? 'true' : 'false');
+    // some browsers jump the caret to the start of the block after list / block commands: restore it by text offset
+    const el = ref.current, sel0 = getSelection();
+    let at = -1;
+    if (el && sel0?.rangeCount && /List|formatBlock/.test(c)) {
+      const r0 = sel0.getRangeAt(0);
+      if (r0.collapsed && el.contains(r0.startContainer)) { const pre = document.createRange(); pre.selectNodeContents(el); pre.setEnd(r0.startContainer, r0.startOffset); at = pre.toString().length; }
+    }
     document.execCommand(c, false, v);
+    if (el && at >= 0) {
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let n: Node | null, left = at;
+      while ((n = w.nextNode())) { const len = n.textContent?.length ?? 0; if (left <= len) { const r = document.createRange(); r.setStart(n, left); r.collapse(true); const s = getSelection(); s?.removeAllRanges(); s?.addRange(r); break; } left -= len; }
+    }
     emit(); keepSel();
   };
   const insertHtml = (html: string) => { restoreSel(); document.execCommand('insertHTML', false, html); emit(); keepSel(); };
+  const addImage = async (f: File) => {
+    try { insertHtml(`<img src="${await storeImage(await compressImage(f, 1000))}" alt="">`); } catch { toast(t('pdfError'), 'err'); }
+  };
   const toggleHeading = () => {
     const block = document.queryCommandValue('formatBlock').toLowerCase();
     cmd('formatBlock', block === 'h3' ? 'div' : 'h3');
@@ -96,7 +134,7 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
   };
 
   return (
-    <div className={cx('relative overflow-visible rounded-2xl border bg-white transition focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-500/15 dark:bg-ink-900', error ? 'border-rose-400' : 'border-ink-200 dark:border-white/10')}>
+    <div ref={root} className={cx('relative overflow-visible rounded-2xl border bg-white transition focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-500/15 dark:bg-ink-900', error ? 'border-rose-400' : 'border-ink-200 dark:border-white/10')}>
       {source ? (
         <textarea className="block w-full resize-y rounded-t-2xl bg-transparent px-4 py-3 font-mono text-sm outline-none" style={{ minHeight }} value={value} onChange={(e) => { last.current = ''; onChange(e.target.value); }} />
       ) : (
@@ -114,7 +152,10 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
           onBlur={() => { keepSel(); emit(); }}
           onKeyUp={keepSel}
           onMouseUp={keepSel}
+          onDrop={(e) => { const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/')); if (f) { e.preventDefault(); void addImage(f); } }}
           onPaste={(e) => {
+            const file = [...e.clipboardData.files].find((x) => x.type.startsWith('image/'));
+            if (file) { e.preventDefault(); void addImage(file); return; }
             const html = e.clipboardData.getData('text/html');
             if (html) { e.preventDefault(); insertHtml(sanitize(html).replace(/ style="[^"]*"/g, '')); }
           }}
@@ -134,15 +175,15 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
         <Btn label={t('highlight')} on={() => { keepSel(); setPop(pop === 'mark' ? '' : 'mark'); }}><Highlighter size={18} /></Btn>
         <Btn label={t('textColor')} on={() => { keepSel(); setPop(pop === 'color' ? '' : 'color'); }}><Baseline size={18} /></Btn>
         <span className="mx-1 h-5 w-px shrink-0 bg-ink-900/10 dark:bg-white/10" />
-        <Btn label="Bold" on={() => cmd('bold')}><Bold size={18} /></Btn>
-        <Btn label="Italic" on={() => cmd('italic')}><Italic size={18} /></Btn>
-        <Btn label="Underline" on={() => cmd('underline')}><Underline size={18} /></Btn>
-        <Btn label="Strikethrough" on={() => cmd('strikeThrough')}><Strikethrough size={18} /></Btn>
-        <Btn label="Heading" on={toggleHeading}><Heading size={18} /></Btn>
-        <Btn label="Bullets" on={() => cmd('insertUnorderedList')}><List size={18} /></Btn>
-        <Btn label="Numbered" on={() => cmd('insertOrderedList')}><ListOrdered size={18} /></Btn>
-        <Btn label="Subscript" on={() => cmd('subscript')}><Subscript size={18} /></Btn>
-        <Btn label="Superscript" on={() => cmd('superscript')}><Superscript size={18} /></Btn>
+        <Btn label="Bold" active={on.bold} on={() => cmd('bold')}><Bold size={18} /></Btn>
+        <Btn label="Italic" active={on.italic} on={() => cmd('italic')}><Italic size={18} /></Btn>
+        <Btn label="Underline" active={on.underline} on={() => cmd('underline')}><Underline size={18} /></Btn>
+        <Btn label="Strikethrough" active={on.strike} on={() => cmd('strikeThrough')}><Strikethrough size={18} /></Btn>
+        <Btn label="Heading" active={on.h} on={toggleHeading}><Heading size={18} /></Btn>
+        <Btn label="Bullets" active={on.ul} on={() => cmd('insertUnorderedList')}><List size={18} /></Btn>
+        <Btn label="Numbered" active={on.ol} on={() => cmd('insertOrderedList')}><ListOrdered size={18} /></Btn>
+        <Btn label="Subscript" active={on.sub} on={() => cmd('subscript')}><Subscript size={18} /></Btn>
+        <Btn label="Superscript" active={on.sup} on={() => cmd('superscript')}><Superscript size={18} /></Btn>
         <Btn label={t('formula')} on={() => { keepSel(); setMathTex(getSelection()?.toString() ?? ''); setPop('math'); }}><Sigma size={18} /></Btn>
         <Btn label="Code" on={wrapCode}><Code size={18} /></Btn>
         <Btn label="Link" on={() => { keepSel(); setLink('https://'); setPop('link'); }}><Link2 size={18} /></Btn>
@@ -161,7 +202,7 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
       )}
 
       {pop === 'color' || pop === 'mark' ? (
-        <div className="absolute bottom-12 left-2 z-20 flex animate-pop gap-1.5 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-ink-900/10 dark:bg-ink-700">
+        <div data-pop className="absolute bottom-12 left-2 z-20 flex animate-pop gap-1.5 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-ink-900/10 dark:bg-ink-700">
           {(pop === 'color' ? COLORS : MARKS).map((c) => (
             <button key={c} type="button" aria-label={c} onMouseDown={(e) => e.preventDefault()} onClick={() => { cmd(pop === 'color' ? 'foreColor' : 'hiliteColor', c); setPop(''); }}
               className="h-7 w-7 rounded-full ring-1 ring-ink-900/15" style={{ background: c === 'transparent' ? 'repeating-linear-gradient(45deg,#fff,#fff 4px,#e5e7eb 4px,#e5e7eb 8px)' : c }} />
@@ -170,7 +211,7 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
       ) : null}
 
       {pop === 'ai' && onAi && (
-        <div className="absolute bottom-12 left-2 z-20 w-56 animate-pop overflow-hidden rounded-2xl bg-white py-1 shadow-xl ring-1 ring-ink-900/10 dark:bg-ink-700">
+        <div data-pop className="absolute bottom-12 left-2 z-20 w-56 animate-pop overflow-hidden rounded-2xl bg-white py-1 shadow-xl ring-1 ring-ink-900/10 dark:bg-ink-700">
           {(['answer', 'question', 'example', 'explanation', 'improve'] as AiAction[]).map((a) => (
             <button key={a} type="button" disabled={busy} onClick={async () => { setBusy(true); try { await onAi(a); } finally { setBusy(false); setPop(''); } }}
               className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold hover:bg-ink-900/5 disabled:opacity-50 dark:hover:bg-white/10">
@@ -204,11 +245,7 @@ export function RichEditor({ value, onChange, placeholder, minHeight = 120, erro
 
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => {
         const f = e.target.files?.[0]; e.target.value = '';
-        if (!f) return;
-        try {
-          const url = await storeImage(await compressImage(f, 1000));
-          insertHtml(`<img src="${url}" alt="">`);
-        } catch { toast(t('pdfError'), 'err'); }
+        if (f) await addImage(f);
       }} />
     </div>
   );

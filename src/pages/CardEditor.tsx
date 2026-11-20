@@ -127,7 +127,10 @@ export function CardEditor() {
       </div>
       <div>
         <span className="mb-1.5 block text-sm font-semibold text-ink-900/80 dark:text-white/80">{kind === 'cloze' || isCloze ? t('backExtra') : t('back')}</span>
-        <RichEditor key={'b' + editorKey} value={f.back} onChange={(v) => setF((x) => ({ ...x, back: v }))} placeholder={t('backPh')} error={!!errs.back} minHeight={110} onAi={ai('back')} />
+        <RichEditor key={'b' + editorKey} value={f.back} onChange={(v) => setF((x) => ({ ...x, back: v }))} placeholder={t('backPh')} error={!!errs.back} minHeight={110} onAi={ai('back')}
+          // a blank made in the answer: question + answer become one fill-in-the-blank text ("Capital of France<br>{{c1::Paris}}")
+          onCloze={!card || card.cardType === 'cloze' ? () => { setF((x) => ({ ...x, front: x.front && !isBlank(x.front) ? `${x.front}<br>${x.back}` : x.back, back: '' })); setKind('cloze'); setEditorKey((k) => k + 1); } : undefined}
+          onOcclusion={!card ? () => { setKind('occlusion'); setErrs({}); } : undefined} />
         {errs.back && <span role="alert" className="mt-1.5 block text-xs font-medium text-rose-500">{errs.back}</span>}
       </div>
       </>)}
