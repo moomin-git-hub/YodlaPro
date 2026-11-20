@@ -14,8 +14,12 @@ object AnswerCheck {
     fun normalize(s: String): String = Normalizer.normalize(s.lowercase().replace('ё', 'е').replace('ʻ', '\'').replace('‘', '\'').replace('’', '\''), Normalizer.Form.NFD)
         .replace(Regex("\\p{Mn}+"), "").replace(punct, " ").replace(Regex("\\s+"), " ").trim()
 
-    fun alternatives(expected: String): List<String> =
-        (listOf(expected) + expected.split(Regex("[,;/\\n]|\\s+or\\s+|\\s+yoki\\s+|\\s+или\\s+"))).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    /** A sentence/definition is never split: it must be typed in full; only short synonyms ("olma, alma; apple") are alternatives. */
+    fun alternatives(expected: String): List<String> {
+        val parts = expected.split(Regex("[,;/\\n]|\\s+or\\s+|\\s+yoki\\s+|\\s+или\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+        val short = parts.size > 1 && parts.all { it.split(Regex("\\s+")).size <= 3 }
+        return (listOf(expected) + if (short) parts else emptyList()).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    }
 
     fun check(typedRaw: String, expectedRaw: String): Diff {
         val typed = typedRaw.trim()

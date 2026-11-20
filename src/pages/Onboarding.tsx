@@ -28,7 +28,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   ];
   const s = slides[i];
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col px-6 pb-10 pt-6 safe-bottom">
+    <div className="mx-auto flex min-h-full max-w-md flex-col px-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-6">
       <div className="flex items-center justify-between">
         <LogoMark size={32} />
         <LangPicker />
@@ -56,7 +56,7 @@ export function GoalSetup() {
   const [goal, setGoal] = useState(20);
   const opts = [{ n: 10, l: t('casual'), e: '🌱' }, { n: 20, l: t('regular'), e: '📘' }, { n: 40, l: t('serious'), e: '🔥' }, { n: 80, l: t('intense'), e: '🚀' }];
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col px-6 pb-10 pt-12 safe-bottom">
+    <div className="mx-auto flex min-h-full max-w-md flex-col px-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-12">
       <h1 className="text-[28px] font-extrabold tracking-tight">{t('pickGoal')}</h1>
       <p className="mt-2 opacity-60">{t('appTagline')}</p>
       <div className="mt-8 space-y-3">

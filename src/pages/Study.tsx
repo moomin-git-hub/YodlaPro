@@ -237,7 +237,7 @@ export function Study() {
   ];
 
   return (
-    <div className="mx-auto flex h-full max-w-xl flex-col px-4 pb-4 pt-3 safe-bottom sm:pt-6">
+    <div className="mx-auto flex h-full max-w-xl flex-col px-4 pb-[calc(1.75rem+env(safe-area-inset-bottom))] pt-3 sm:pt-6">
       <div className="flex items-center gap-2">
         <IconButton label={t('exitStudy')} onClick={exit}><X size={24} /></IconButton>
         <div className="flex flex-1 flex-col items-center gap-1.5">
@@ -252,11 +252,11 @@ export function Study() {
       <CardMenu card={card} data={data} open={menu} onClose={() => setMenu(false)} onGone={() => advance(queue)} onEdit={finish} />
 
       {flipMode ? (
-      <div className={cx('flip relative my-4 flex-1', flipped && 'flipped')} style={{ minHeight: 340 }}>
+      <div className={cx('flip relative my-4 flex-1', flipped && 'flipped')} style={{ minHeight: 220 }}>
         <div className="flip-inner h-full">
           <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) reveal(); }} aria-label={t('tapToReveal')} className="flip-face card-surface flex h-full w-full cursor-pointer flex-col rounded-[32px] p-6 text-left">
             <CardTop card={card} />
-            <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto py-4 text-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-4 text-center [&>*:first-child]:mt-auto [&>*:last-child]:mb-auto">
               {occ ? <><RichView html={card.front} className="mb-3 w-full text-lg font-bold" /><Occlusion image={card.image} occ={occ} revealed={false} /></> : <>
                 {card.image && <img src={card.image} alt="" className="mb-4 max-h-44 rounded-2xl object-contain" />}
                 <RichView html={faces.q} className="w-full text-[26px] font-extrabold leading-snug" />
@@ -266,11 +266,9 @@ export function Study() {
           </div>
           <div className="flip-face flip-back card-surface flex flex-col rounded-[32px] p-6" onClick={() => setFlipped(false)}>
             <CardTop card={card} />
-            <div className="flex-1 overflow-y-auto py-3">
-              {occ ? <Occlusion image={card.image} occ={occ} revealed /> : faces.cloze ? <RichView html={faces.a} className="text-center text-[22px] font-bold leading-snug" /> : <>
-                <RichView html={qText} className="text-center text-base font-semibold opacity-50" />
-                <div className="mx-auto my-4 h-px w-16 bg-ink-900/10 dark:bg-white/10" />
-              </>}
+{!(faces.cloze || occ) && <div className="shrink-0 pt-3"><RichView html={qText} className="max-h-28 overflow-y-auto text-center text-base font-semibold opacity-60" /><div className="mx-auto mt-3 h-px w-16 bg-ink-900/10 dark:bg-white/10" /></div>}
+            <div className="min-h-0 flex-1 overflow-y-auto py-3 [&>*:first-child]:mt-auto [&>*:last-child]:mb-auto">
+              {occ ? <Occlusion image={card.image} occ={occ} revealed /> : faces.cloze ? <RichView html={faces.a} className="text-center text-[22px] font-bold leading-snug" /> : null}
               {(!(faces.cloze || occ) || card.back) && <RichView html={occ ? card.back : faces.a} className={cx('text-center leading-snug', faces.cloze || occ ? 'mt-4 text-base' : 'text-[24px] font-extrabold text-brand-600 dark:text-brand-300')} />}
               {card.example && <div className="mt-5 rounded-2xl bg-ink-900/[.04] p-4 text-[15px] italic leading-relaxed dark:bg-white/5">“{card.example}”</div>}
               {card.explanation && <div className="mt-3 flex gap-2 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:bg-amber-500/10 dark:text-amber-100"><Lightbulb size={18} className="mt-0.5 shrink-0" />{card.explanation}</div>}
@@ -280,25 +278,25 @@ export function Study() {
       </div>
 
       ) : (
-        <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) reveal(); }} className="card-surface relative my-4 flex min-h-[340px] flex-1 cursor-pointer flex-col overflow-hidden rounded-[32px] p-6 text-left">
+        <div role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) reveal(); }} className="card-surface relative my-4 flex min-h-[220px] flex-1 cursor-pointer flex-col overflow-hidden rounded-[32px] p-6 text-left">
           <CardTop card={card} />
           {!flipped ? (
-            <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto py-4 text-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-4 text-center [&>*:first-child]:mt-auto [&>*:last-child]:mb-auto">
               {occ ? <><RichView html={card.front} className="mb-3 w-full text-lg font-bold" /><Occlusion image={card.image} occ={occ} revealed={false} /></> : <>
                 {card.image && <img src={card.image} alt="" className="mb-4 max-h-44 rounded-2xl object-contain" />}
                 <RichView html={faces.q} className="w-full text-[26px] font-extrabold leading-snug" />
               </>}
             </div>
           ) : (
-              <div className="flex flex-1 animate-fade flex-col justify-center overflow-y-auto py-3">
-              {occ ? <Occlusion image={card.image} occ={occ} revealed /> : faces.cloze ? <RichView html={faces.a} className="text-center text-[22px] font-bold leading-snug" /> : <>
-                <RichView html={qText} className="text-center text-base font-semibold opacity-50" />
-                <div className="mx-auto my-4 h-px w-16 bg-ink-900/10 dark:bg-white/10" />
-              </>}
+            <>
+              {!(faces.cloze || occ) && <div className="shrink-0 pt-3"><RichView html={qText} className="max-h-28 overflow-y-auto text-center text-base font-semibold opacity-60" /><div className="mx-auto mt-3 h-px w-16 bg-ink-900/10 dark:bg-white/10" /></div>}
+              <div className="flex min-h-0 flex-1 animate-fade flex-col overflow-y-auto py-3 [&>*:first-child]:mt-auto [&>*:last-child]:mb-auto">
+              {occ ? <Occlusion image={card.image} occ={occ} revealed /> : faces.cloze ? <RichView html={faces.a} className="text-center text-[22px] font-bold leading-snug" /> : null}
               {(!(faces.cloze || occ) || card.back) && <RichView html={occ ? card.back : faces.a} className={cx('text-center leading-snug', faces.cloze || occ ? 'mt-4 text-base' : 'text-[24px] font-extrabold text-brand-600 dark:text-brand-300')} />}
               {card.example && <div className="mt-5 rounded-2xl bg-ink-900/[.04] p-4 text-[15px] italic leading-relaxed dark:bg-white/5">“{card.example}”</div>}
               {card.explanation && <div className="mt-3 flex gap-2 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:bg-amber-500/10 dark:text-amber-100"><Lightbulb size={18} className="mt-0.5 shrink-0" />{card.explanation}</div>}
-            </div>
+              </div>
+            </>
           )}
         </div>
       )}

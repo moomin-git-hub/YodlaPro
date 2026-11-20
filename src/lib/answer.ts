@@ -8,8 +8,12 @@ export interface AnswerDiff { correct: boolean; typed: [string, boolean][]; expe
 export const normalize = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/[ʻ‘’]/g, "'").normalize('NFD')
   .replace(/\p{Mn}+/gu, '').replace(/(?![+#%$€£₽])[\p{P}\p{S}]/gu, ' ').replace(/\s+/g, ' ').trim();
 
-export const alternatives = (expected: string) =>
-  [...new Set([expected, ...expected.split(/[,;/\n]|\s+or\s+|\s+yoki\s+|\s+или\s+/)].map((x) => x.trim()).filter(Boolean))];
+/** "olma, alma; apple" accepts any one word/short phrase. A sentence/definition is never split: it must be typed in full. */
+export const alternatives = (expected: string) => {
+  const parts = expected.split(/[,;/\n]|\s+or\s+|\s+yoki\s+|\s+или\s+/).map((x) => x.trim()).filter(Boolean);
+  const short = parts.length > 1 && parts.every((x) => x.split(/\s+/).length <= 3);
+  return [...new Set([expected, ...(short ? parts : [])].map((x) => x.trim()).filter(Boolean))];
+};
 
 function lcs(a: string, b: string): [number, number][] {
   const n = Math.min(a.length, 300), m = Math.min(b.length, 300);

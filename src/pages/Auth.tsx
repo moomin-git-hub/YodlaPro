@@ -77,7 +77,7 @@ export function AuthPage() {
   if (recovery) return <RecoveryCodeScreen code={recovery.code} onDone={() => activateLocal(recovery.id)} />;
 
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col px-6 pb-10 pt-6 safe-bottom">
+    <div className="mx-auto flex min-h-full max-w-md flex-col px-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-6">
       <div className="flex items-center justify-between"><Logo /><LangPicker /></div>
       <div className="mt-10 animate-fade">
         <h1 className="text-[28px] font-extrabold tracking-tight">{mode === 'in' ? t('welcomeBack') : mode === 'up' ? t('createYourAccount') : t('resetPassword')}</h1>
