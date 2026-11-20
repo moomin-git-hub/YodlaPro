@@ -166,9 +166,39 @@ export async function addCards(userId, deckId, cards) {
           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$11)`,
           [id, userId, deckId, front, back, String(x.example ?? '').trim().slice(0, 2000), String(x.explanation ?? '').trim().slice(0, 4000), noteId, v.type, v.extra, new Date(now + i)]);
       }
+      if (x.reverse && !nums.length && back) { // teskari karta: back → front, shares the note
+        const rid = randomUUID(); ids.push(rid);
+        await c.query(`insert into flashcards (id, user_id, deck_id, front, back, example, explanation, note_id, card_type, extra, created_at, updated_at, due)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,'reverse','',$9,$9,$9)`,
+          [rid, userId, deckId, front, back, String(x.example ?? '').trim().slice(0, 2000), String(x.explanation ?? '').trim().slice(0, 4000), noteId, new Date(now + i + 1)]);
+      }
     }
   });
   return ids;
+}
+
+/** Adds / removes the reverse sibling of a basic note. Returns true/false = reverse state now, null = not possible (cloze/occlusion/missing). */
+export async function setReverse(userId, cardId, on) {
+  const { rows: [b] } = await q('select * from flashcards where id=$1 and user_id=$2', [cardId, userId]);
+  if (!b) return null;
+  const noteId = b.note_id ?? b.id;
+  const { rows: sib } = await q('select id, card_type from flashcards where user_id=$1 and coalesce(note_id, id)=$2', [userId, noteId]);
+  if (sib.some((x) => x.card_type === 'cloze' || x.card_type === 'occlusion')) return null;
+  const rev = sib.find((x) => x.card_type === 'reverse');
+  if (on && !rev) {
+    const base = sib.length === 1 || b.card_type !== 'reverse' ? b : (await q('select * from flashcards where id=$1', [sib.find((x) => x.card_type !== 'reverse').id])).rows[0];
+    await q('update flashcards set note_id=$2 where id=$1 and note_id is null', [base.id, noteId]);
+    await q(`insert into flashcards (id, user_id, deck_id, front, back, example, explanation, image, note_id, card_type, extra, created_at, updated_at, due)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'reverse','',now(),now(),now())`,
+      [randomUUID(), userId, base.deck_id, base.front, base.back, base.example, base.explanation, base.image, noteId]);
+    return true;
+  }
+  if (!on && rev) { await q('delete from flashcards where id=$1 and user_id=$2', [rev.id, userId]); return false; }
+  return !!rev;
+}
+export async function hasReverse(userId, cardId) {
+  const { rows } = await q(`select 1 from flashcards where user_id=$1 and card_type='reverse' and coalesce(note_id, id) = (select coalesce(note_id, id) from flashcards where id=$2 and user_id=$1)`, [userId, cardId]);
+  return rows.length > 0;
 }
 
 export async function deleteCards(userId, ids) {

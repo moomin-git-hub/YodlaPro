@@ -40,6 +40,15 @@ console.log('✓ list/search/update/deck cards/stats/settings/subdeck/delete');
 const sync = await j('/api/sync', { headers: auth });
 assert.ok(sync.body.flashcards.some((c) => c.front.startsWith('The {{c1::') && c.card_type === 'cloze'));
 assert.equal(sync.body.user_settings[0].data.newPerDay, 30); console.log('✓ app sync sees the changes');
+// reverse cards (add_cards flag + update_card toggle)
+const rcount = async (f) => (await j('/api/sync', { headers: auth })).body.flashcards.filter((c) => c.card_type === 'reverse' && c.front === f).length;
+r = await call('add_cards', { deck: 'Rev', cards: [{ question: 'cat', answer: 'mushuk', reverse: true }, { question: 'dog', answer: 'it' }, { question: 'The {{c1::sun}} is hot', reverse: true }] });
+assert.equal(await rcount('cat'), 1); assert.equal(await rcount('dog'), 0); assert.equal(await rcount('The {{c1::sun}} is hot'), 0);
+const dogId = (await j('/api/sync', { headers: auth })).body.flashcards.find((c) => c.front === 'dog').id;
+r = await call('update_card', { card_id: dogId, reverse: true }); assert.equal(r.data.reverse, true); assert.equal(await rcount('dog'), 1);
+r = await call('update_card', { card_id: dogId, reverse: false }); assert.equal(r.data.reverse, false); assert.equal(await rcount('dog'), 0);
+r = await call('add_cards', { deck: 'Rev', reverse: true, cards: [{ question: 'bird', answer: 'qush' }] }); assert.equal(await rcount('bird'), 1);
+console.log('✓ reverse cards (MCP)');
 // ChatGPT: search + fetch tools
 r = await call('add_cards', { deck: 'IELTS words', cards: [{ question: 'ubiquitous', answer: 'hamma joyda bor', example: 'Phones are ubiquitous.', explanation: 'formal' }] });
 r = await call('search', { query: 'ubiquitous' }); assert.equal(r.data.results.length, 1); assert.match(r.data.results[0].title, /ubiquitous/);

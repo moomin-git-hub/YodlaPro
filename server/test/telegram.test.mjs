@@ -169,6 +169,17 @@ assert.equal(bk.back, 'kitob'); assert.equal(bk.example, 'I read a book.'); asse
 await msg('grape - uzum - I like grapes. - meva');
 const gr = await cardOf('grape');
 assert.equal(gr.back, 'uzum'); assert.equal(gr.example, 'I like grapes.'); assert.equal(gr.explanation, 'meva');
+// reverse card: per-card toggle in the card view, and a default setting for new cards
+const revCnt = async (f) => (await q(`select count(*)::int n from flashcards where user_id=$1 and card_type='reverse' and front=$2`, [user.id, f])).rows[0].n;
+assert.equal(await revCnt('grape'), 0);
+await cb(`cv:${gr.id}`); assert.equal(await revCnt('grape'), 1);
+await cb(`cv:${gr.id}`); assert.equal(await revCnt('grape'), 0);
+await cb('set:reverse'); await msg('melon - qovun - I like melon.');
+assert.equal(await revCnt('melon'), 1);
+const { rows: [rv] } = await q(`select back, example from flashcards where user_id=$1 and card_type='reverse' and front='melon'`, [user.id]);
+assert.equal(rv.back, 'qovun'); assert.equal(rv.example, 'I like melon.');
+await cb('set:reverse'); await msg('kiwi - kivi'); assert.equal(await revCnt('kiwi'), 0);
+console.log('✓ reverse cards');
 await msg('pen - ruchka\nmisol: Give me a pen.\nizoh: yozish quroli\ncup - piyola');
 const pen = await cardOf('pen'), cup = await cardOf('cup');
 assert.equal(pen.example, 'Give me a pen.'); assert.equal(pen.explanation, 'yozish quroli'); assert.equal(cup.back, 'piyola');

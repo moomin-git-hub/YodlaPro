@@ -11,7 +11,7 @@ import { q } from './db.js';
 import { requireAuth } from './auth.js';
 import { rateLimit, wrap } from './util.js';
 import {
-  deckList, deckTree, deckCards, createDeck, addCards, deleteNotes, editNote, searchCards, nextCard, review, dueCount,
+  deckList, deckTree, deckCards, createDeck, addCards, setReverse, deleteNotes, editNote, searchCards, nextCard, review, dueCount,
   todayData, reportData, updateSettings, settingsOf, labels, presetFor, isUuid, toCard,
 } from './cards.js';
 
@@ -39,6 +39,7 @@ const CardIn = z.object({
   answer: z.string().max(4000).optional().describe('Back side: translation / answer (may be empty only for cloze cards).'),
   example: z.string().max(2000).optional().describe('Optional example sentence using the word.'),
   explanation: z.string().max(4000).optional().describe('Optional explanation: meaning nuance, usage, grammar or a mnemonic.'),
+  reverse: z.boolean().optional().describe('Also create the reverse card (answer → question), for vocabulary. Not for cloze cards.'),
 });
 
 /** Finds a deck by id or (case-insensitive) title; creates it when `create` is set. */
@@ -66,6 +67,7 @@ function buildServer(userId, reg) {
         + 'Use add_cards to save words/cards the user asks for (always fill example and explanation when it helps learning, in the user\'s language), '
         + 'list_decks to find deck names, search_cards / get_deck_cards to look things up, update_card / delete_cards to change them, '
         + 'get_due_cards + review_card to quiz the user (show the question, wait for their answer, then rate 1=Again 2=Hard 3=Good 4=Easy), '
+        + 'reverse=true on add_cards / update_card adds the reverse card (answer → question) when the user wants it, '
         + 'and get_stats for progress. Changes appear in the Yodla apps after their next sync.',
     },
   );
@@ -99,12 +101,13 @@ function buildServer(userId, reg) {
     inputSchema: {
       deck: z.string().max(100).optional().describe('Deck id or title, e.g. "4000 Essential Words".'),
       cards: z.array(CardIn).min(1).max(200),
+      reverse: z.boolean().optional().describe('Make reverse cards (answer → question) for all cards that do not say otherwise.'),
     },
-  }, async ({ deck, cards }) => {
+  }, async ({ deck, cards, reverse }) => {
     const bad = cards.find((c) => !c.answer?.trim() && !/\{\{c\d+::/.test(c.question));
     if (bad) return fail(`Card "${bad.question}" needs an answer (only cloze cards may leave it empty).`);
     const d = await resolveDeck(userId, deck, true);
-    const ids = await addCards(userId, d.id, cards.map((c) => ({ front: c.question, back: c.answer ?? '', example: c.example ?? '', explanation: c.explanation ?? '' })));
+    const ids = await addCards(userId, d.id, cards.map((c) => ({ front: c.question, back: c.answer ?? '', example: c.example ?? '', explanation: c.explanation ?? '', reverse: c.reverse ?? reverse ?? false })));
     return out({ added: cards.length, card_ids: ids, deck: { id: d.id, title: d.title } });
   });
 
@@ -128,10 +131,13 @@ function buildServer(userId, reg) {
     inputSchema: {
       card_id: z.string().uuid(), question: z.string().min(1).max(2000).optional(), answer: z.string().max(4000).optional(),
       example: z.string().max(2000).optional(), explanation: z.string().max(4000).optional(),
+      reverse: z.boolean().optional().describe('true = add the reverse card (answer → question), false = remove it. Basic cards only.'),
     },
-  }, async ({ card_id, question, answer, example, explanation }) => {
+  }, async ({ card_id, question, answer, example, explanation, reverse }) => {
     const n = await editNote(userId, card_id, { front: question, back: answer, example, explanation });
-    return n ? out({ updated: n }) : fail('Card not found (or nothing to change).');
+    let rv;
+    if (reverse !== undefined) { rv = await setReverse(userId, card_id, reverse); if (rv === null) return fail('Reverse is only possible for basic cards.'); }
+    return n || rv !== undefined ? out({ updated: n, reverse: rv }) : fail('Card not found (or nothing to change).');
   });
 
   server.registerTool('delete_cards', {

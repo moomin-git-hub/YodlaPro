@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { q } from './db.js';
 import { requireAuth, signToken, publicUser } from './auth.js';
 import { wrap } from './util.js';
-import { nextCard, dueCount, labels, review, targetDeck, addCards, deleteCards, streaks, startOfDay, DAY, toCard, presetFor, settingsOf, reportData,
+import { nextCard, dueCount, labels, review, targetDeck, addCards, setReverse, hasReverse, deleteCards, streaks, startOfDay, DAY, toCard, presetFor, settingsOf, reportData,
   deckList, deckTree, deckCards, createDeck, deleteDeck, deleteNotes, editNote, flagNote, resetCards, searchCards, todayData, updateSettings, isUuid } from './cards.js';
 import { buildReport } from './reports.js';
 import { callAI, buildPrompt, parseCards, aiConfigured } from './ai.js';
@@ -117,7 +117,7 @@ const T2 = {
     stats: (s) => `📊 <b>Statistika</b>\n\n📚 Kartalar: <b>${s.all}</b> (🆕 ${s.new} · 📖 ${s.learning} · 🏆 ${s.mastered})\n🔥 Seriya: <b>${s.streak}</b> kun (eng uzun: ${s.best})\n\n<b>Oxirgi 7 kun</b>\n${s.week}\n\n🗓 7 kunda: ${s.reviews} ta takror · ${s.acc}% aniqlik · ${s.learnedNew} ta yangi so‘z`,
     daily: (d) => `📅 <b>Bugungi hisobot</b>\n\n🔁 Takrorlar: <b>${d.reviews}</b> (${d.cards} ta karta)\n🆕 Yangi so‘zlar: <b>${d.learnedNew}</b>\n🎯 Aniqlik: <b>${d.acc}%</b>\n⏱ Vaqt: <b>${d.minutes}</b> daqiqa\n🔥 Seriya: <b>${d.streak}</b> kun${d.hard ? `\n\n😓 <b>Qiyin bo‘lganlar:</b>\n${d.hard}` : ''}\n\n📆 Ertaga: <b>${d.tomorrow}</b> ta takror kutadi.`,
     dailyNone: (d) => `📅 <b>Bugungi hisobot</b>\n\nBugun hali o‘qimadingiz. 🔥 Seriya: <b>${d.streak}</b> kun.\n⏰ Hozir <b>${d.due}</b> ta karta kutyapti.`,
-    dailyReport: 'Kunlik hisobot', newPerDay: (n) => `🆕 Kuniga yangi so‘z: ${n}`, shuffle: 'Aralashtirish', fmtHelp: 'Bir qatorda: <code>savol - javob | misol | izoh</code>',
+    revLabel: '🔁 Teskari karta', revNA: 'Cloze kartalarda teskari karta bo‘lmaydi.', dailyReport: 'Kunlik hisobot', newPerDay: (n) => `🆕 Kuniga yangi so‘z: ${n}`, shuffle: 'Aralashtirish', fmtHelp: 'Bir qatorda: <code>savol - javob | misol | izoh</code>',
   },
   en: {
     menu: '🏠 <b>Main menu</b>', mDecks: '🗂 Decks', mAdd: '➕ Add card', mSearch: '🔎 Search', mStats: '📊 Statistics', mToday: '📅 Today’s report', mReports: '📄 Reports', mSettings: '⚙️ Settings', mMenu: '🏠 Menu',
@@ -139,7 +139,7 @@ const T2 = {
     stats: (s) => `📊 <b>Statistics</b>\n\n📚 Cards: <b>${s.all}</b> (🆕 ${s.new} · 📖 ${s.learning} · 🏆 ${s.mastered})\n🔥 Streak: <b>${s.streak}</b> days (best: ${s.best})\n\n<b>Last 7 days</b>\n${s.week}\n\n🗓 7 days: ${s.reviews} reviews · ${s.acc}% accuracy · ${s.learnedNew} new words`,
     daily: (d) => `📅 <b>Today’s report</b>\n\n🔁 Reviews: <b>${d.reviews}</b> (${d.cards} cards)\n🆕 New words: <b>${d.learnedNew}</b>\n🎯 Accuracy: <b>${d.acc}%</b>\n⏱ Time: <b>${d.minutes}</b> min\n🔥 Streak: <b>${d.streak}</b> days${d.hard ? `\n\n😓 <b>Hard today:</b>\n${d.hard}` : ''}\n\n📆 Tomorrow: <b>${d.tomorrow}</b> reviews waiting.`,
     dailyNone: (d) => `📅 <b>Today’s report</b>\n\nYou haven’t studied today yet. 🔥 Streak: <b>${d.streak}</b> days.\n⏰ <b>${d.due}</b> cards are waiting now.`,
-    dailyReport: 'Daily report', newPerDay: (n) => `🆕 New words per day: ${n}`, shuffle: 'Shuffle', fmtHelp: 'One line: <code>question - answer | example | explanation</code>',
+    revLabel: '🔁 Reverse card', revNA: 'Cloze cards have no reverse.', dailyReport: 'Daily report', newPerDay: (n) => `🆕 New words per day: ${n}`, shuffle: 'Shuffle', fmtHelp: 'One line: <code>question - answer | example | explanation</code>',
   },
   ru: {
     menu: '🏠 <b>Главное меню</b>', mDecks: '🗂 Колоды', mAdd: '➕ Добавить карточку', mSearch: '🔎 Поиск', mStats: '📊 Статистика', mToday: '📅 Отчёт за день', mReports: '📄 Отчёты', mSettings: '⚙️ Настройки', mMenu: '🏠 Меню',
@@ -161,14 +161,14 @@ const T2 = {
     stats: (s) => `📊 <b>Статистика</b>\n\n📚 Карточек: <b>${s.all}</b> (🆕 ${s.new} · 📖 ${s.learning} · 🏆 ${s.mastered})\n🔥 Серия: <b>${s.streak}</b> дн. (рекорд: ${s.best})\n\n<b>Последние 7 дней</b>\n${s.week}\n\n🗓 За 7 дней: ${s.reviews} повторений · ${s.acc}% точность · ${s.learnedNew} новых слов`,
     daily: (d) => `📅 <b>Отчёт за день</b>\n\n🔁 Повторений: <b>${d.reviews}</b> (${d.cards} карточек)\n🆕 Новых слов: <b>${d.learnedNew}</b>\n🎯 Точность: <b>${d.acc}%</b>\n⏱ Время: <b>${d.minutes}</b> мин\n🔥 Серия: <b>${d.streak}</b> дн.${d.hard ? `\n\n😓 <b>Трудные сегодня:</b>\n${d.hard}` : ''}\n\n📆 Завтра: <b>${d.tomorrow}</b> повторений.`,
     dailyNone: (d) => `📅 <b>Отчёт за день</b>\n\nСегодня вы ещё не занимались. 🔥 Серия: <b>${d.streak}</b> дн.\n⏰ Сейчас ждут <b>${d.due}</b> карточек.`,
-    dailyReport: 'Ежедневный отчёт', newPerDay: (n) => `🆕 Новых слов в день: ${n}`, shuffle: 'Перемешивать', fmtHelp: 'Одной строкой: <code>вопрос - ответ | пример | пояснение</code>',
+    revLabel: '🔁 Обратная карточка', revNA: 'У cloze-карточек нет обратной.', dailyReport: 'Ежедневный отчёт', newPerDay: (n) => `🆕 Новых слов в день: ${n}`, shuffle: 'Перемешивать', fmtHelp: 'Одной строкой: <code>вопрос - ответ | пример | пояснение</code>',
   },
 };
 for (const l of Object.keys(T)) Object.assign(T[l], T2[l]);
 
 const REMINDER_TIMES = ['08:00', '12:00', '14:00', '18:00', '20:00', '22:00'];
 const DAILY_TIMES = ['19:00', '20:00', '21:00', '22:00', '23:00'];
-const DEFAULT_PREFS = { reminders: ['20:00'], streakSaver: true, weeklyReport: true, leaderboard: false, dailyReport: true, dailyTime: '21:00' };
+const DEFAULT_PREFS = { reminders: ['20:00'], streakSaver: true, weeklyReport: true, leaderboard: false, dailyReport: true, dailyTime: '21:00', reverse: false };
 
 // ---------------- Telegram API ----------------
 async function tg(method, body) {
@@ -311,12 +311,13 @@ async function tts(link, chatId, cardId) {
 }
 
 // ---------------- adding cards ----------------
+const withRev = (link, cards) => cards.map((c) => ({ ...c, reverse: c.reverse ?? !!link.prefs.reverse }));
 const PAIR = /^\s*(.+?)\s+[-–—=]\s+(.+?)\s*$/;
 async function addFromText(link, t, chatId, text) {
   const { cards, other } = parsePairs(text);
   if (cards.length && cards.length >= (cards.length + other) * 0.6) {
     const deck = await targetDeck(link.user_id, link.prefs.deckId);
-    const ids = await addCards(link.user_id, deck.id, cards);
+    const ids = await addCards(link.user_id, deck.id, withRev(link, cards));
     await setState(link.user_id, { lastAdded: ids });
     const list = cards.slice(0, 15).map((c) => `• <b>${esc(c.front)}</b> — ${esc(c.back)}${c.example ? `\n   <i>${esc(c.example)}</i>` : ''}${c.explanation ? `\n   💡 ${esc(c.explanation)}` : ''}`).join('\n');
     const rows = [[{ text: t.undo, callback_data: 'undo' }, { text: t.study(0), callback_data: 'st' }]];
@@ -380,6 +381,7 @@ function settingsKb(link, t, deckTitle, app = {}) {
   const times = REMINDER_TIMES.map((h) => ({ text: `${p.reminders.includes(h) ? '🔔' : '·'} ${h}`, callback_data: `rem:${h}` }));
   return kb([times.slice(0, 3), times.slice(3),
     [{ text: `${on(p.dailyReport)} ${t.dailyReport}`, callback_data: 'set:dailyReport' }, { text: `🕘 ${p.dailyTime ?? '21:00'}`, callback_data: 'dt' }],
+    [{ text: `${on(p.reverse)} ${t.revLabel}`, callback_data: 'set:reverse' }],
     [{ text: `${on(p.streakSaver)} ${t.streakSaver}`, callback_data: 'set:streakSaver' }],
     [{ text: `${on(p.weeklyReport)} ${t.weeklyReport}`, callback_data: 'set:weeklyReport' }],
     [{ text: `${on(p.leaderboard)} ${t.ranking}`, callback_data: 'set:leaderboard' }],
@@ -477,11 +479,13 @@ async function showCard(link, t, chatId, msg, cardId) {
     ? t.stReview(new Date(c.due).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: process.env.TZ || 'Asia/Tashkent' })) : t.stLearn;
   const qText = tgHtml(c.front.replace(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g, '[$1]'));
   const text = t.card({ q: qText || '—', a: tgHtml(c.back) || '—', ex: tgHtml(c.example), xp: tgHtml(c.explanation), deck: esc(row.deck_title), status });
+  const rv = await hasReverse(link.user_id, c.id);
   const rows = [
     [{ text: t.eFront, callback_data: `ce:front:${c.id}` }, { text: t.eBack, callback_data: `ce:back:${c.id}` }],
     [{ text: t.eEx, callback_data: `ce:example:${c.id}` }, { text: t.eXp, callback_data: `ce:explanation:${c.id}` }],
     [{ text: c.bookmarked ? t.unbm : t.bm, callback_data: `cf:bookmarked:${c.id}` }, { text: c.frozen ? t.unfreeze : t.freeze, callback_data: `cf:frozen:${c.id}` }],
   ];
+  if (!/\{\{c\d+::/.test(c.front) && c.cardType !== 'occlusion') rows.push([{ text: `${rv ? '✅' : '⬜'} ${t.revLabel}`, callback_data: `cv:${c.id}` }]);
   if ((!c.example || !c.explanation) && aiConfigured()) rows.push([{ text: t.enrich, callback_data: `ci:${c.id}` }]);
   rows.push([{ text: t.reset, callback_data: `cr:${c.id}` }, { text: t.delCard, callback_data: `cx:${c.id}` }]);
   rows.push([{ text: t.toDeck, callback_data: `cl:${c.deckId}:0` }, { text: t.mMenu, callback_data: 'menu' }]);
@@ -512,10 +516,11 @@ async function wizardInput(link, t, chatId, input, value) {
 async function wizardSave(link, t, chatId, deckId, card, msg) {
   await setInput(link.user_id, null);
   const deck = await targetDeck(link.user_id, deckId);
-  const ids = await addCards(link.user_id, deck.id, [card]);
+  const ids = await addCards(link.user_id, deck.id, withRev(link, [card]));
   await setState(link.user_id, { lastAdded: ids });
   const view = t.card({ q: esc(card.front), a: esc(card.back ?? '') || '—', ex: esc(card.example ?? ''), xp: esc(card.explanation ?? ''), deck: esc(deck.title), status: t.stNew });
   const rows = [[{ text: t.addMore, callback_data: `wz:${deck.id}` }, { text: t.undo, callback_data: 'undo' }]];
+  if (ids[0] && !/\{\{c\d+::/.test(card.front)) rows.push([{ text: `${(await hasReverse(link.user_id, ids[0])) ? '✅' : '⬜'} ${t.revLabel}`, callback_data: `cv:${ids[0]}` }]);
   if ((!card.example || !card.explanation) && aiConfigured()) rows.push([{ text: t.enrich, callback_data: 'enrich' }]);
   rows.push([{ text: t.study(0), callback_data: 'st' }, { text: t.mMenu, callback_data: 'menu' }]);
   return editOrSend(chatId, msg, { text: `${t.wSaved(esc(deck.title))}\n\n${view}`, ...kb(rows) });
@@ -738,6 +743,12 @@ async function onCallback(cb) {
   }
   // cards
   if (k === 'cd') return showCard(link, t, chatId, msg, a);
+  if (k === 'cv') {
+    if (!isUuid(a)) return;
+    const now = await setReverse(uid, a, !(await hasReverse(uid, a)));
+    if (now === null) return send(chatId, t.revNA);
+    return showCard(link, t, chatId, msg, a);
+  }
   if (k === 'ce') {
     if (!t.askField[a]) return;
     await setInput(uid, { k: 'edit', id: b, field: a });
@@ -813,7 +824,7 @@ async function onCallback(cb) {
     await setState(link.user_id, { pending: null });
     if (a !== 'ok' || !cards.length) return tg('editMessageText', { chat_id: chatId, message_id: cb.message.message_id, text: t.cancelled });
     const deck = await targetDeck(link.user_id, link.prefs.deckId);
-    const ids = await addCards(link.user_id, deck.id, cards);
+    const ids = await addCards(link.user_id, deck.id, withRev(link, cards));
     await setState(link.user_id, { lastAdded: ids });
     return tg('editMessageText', { chat_id: chatId, message_id: cb.message.message_id, text: t.added(ids.length, esc(deck.title)), parse_mode: 'HTML', ...kb([[{ text: t.undo, callback_data: 'undo' }, { text: t.study(0), callback_data: 'st' }]]) });
   }
@@ -826,7 +837,7 @@ async function onCallback(cb) {
     return showSettings({ ...link, prefs: { ...link.prefs, reminders } }, t, chatId, cb.message);
   }
   if (k === 'set') {
-    if (!['streakSaver', 'weeklyReport', 'leaderboard', 'dailyReport'].includes(a)) return;
+    if (!['streakSaver', 'weeklyReport', 'leaderboard', 'dailyReport', 'reverse'].includes(a)) return;
     const v = !link.prefs[a]; await setPrefs(link.user_id, { [a]: v });
     return showSettings({ ...link, prefs: { ...link.prefs, [a]: v } }, t, chatId, cb.message);
   }
