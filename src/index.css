@@ -73,3 +73,6 @@ body {
 .rich-edit:empty::before { content: attr(data-placeholder); opacity: .35; pointer-events: none; }
 .rich-edit img { outline-offset: 2px; }
 .rich-edit img:hover { outline: 2px solid var(--color-brand-400); }
+
+/* Mobile browsers zoom the page when a focused field is <16px */
+@media (max-width: 640px) { input, textarea, select, .input { font-size: 16px !important; } }
