@@ -60,7 +60,8 @@ fun CardEditScreen(nav: NavHostController, id: String, deckArg: String?, typeArg
     var occ by remember { mutableStateOf(card?.takeIf { it.type == CardType.OCCLUSION }?.occlusion() ?: Occlusion()) }
     var selMask by remember { mutableStateOf<String?>(null) }
     var flags by remember { mutableStateOf(Triple(card?.difficult ?: false, card?.bookmarked ?: false, card?.frozen ?: false)) }
-    var reversed by remember { mutableStateOf(card?.let { repo.hasReverse(it) } ?: false) }
+    val revPrefs = remember { ctx.getSharedPreferences("yodla_editor", android.content.Context.MODE_PRIVATE) }
+    var reversed by remember { mutableStateOf(card?.let { repo.hasReverse(it) } ?: revPrefs.getBoolean("lastReversed", false)) }
     var focus by remember { mutableStateOf("front") }
     var errs by remember { mutableStateOf(mapOf<String, String>()) }
     var busyImg by remember { mutableStateOf(false) }
@@ -192,7 +193,7 @@ fun CardEditScreen(nav: NavHostController, id: String, deckArg: String?, typeArg
                     AsyncImage(image, null, Modifier.heightIn(max = 200.dp).clip(RoundedCornerShape(16.dp)), contentScale = ContentScale.Fit)
                     IconButton({ image = "" }, Modifier.align(Alignment.TopEnd).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f))) { Icon(Icons.Rounded.Close, stringResource(R.string.removeImage), tint = Color.White) }
                 }
-                ToggleRow(Icons.Rounded.SwapHoriz, Brand, stringResource(R.string.alsoReversed), reversed) { reversed = it }
+                ToggleRow(Icons.Rounded.SwapHoriz, Brand, stringResource(R.string.alsoReversed), reversed) { reversed = it; if (card == null) revPrefs.edit().putBoolean("lastReversed", it).apply() }
             }
             else -> {
                 val canSwitch = card == null

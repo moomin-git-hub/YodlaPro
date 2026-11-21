@@ -36,7 +36,8 @@ export function CardEditor() {
   const [masks, setMasks] = useState<OccMask[]>(occ0?.masks ?? []);
   const [occMode, setOccMode] = useState<'all' | 'one'>(occ0?.mode === 'one' ? 'one' : 'all');
   const isCloze = kind === 'cloze' || (kind === 'basic' && clozeIndices(f.front).length > 0 && !card);
-  const [reversed, setReversed] = useState(card ? hasReverse(card) : false);
+  const [reversed, setReversed] = useState(card ? hasReverse(card) : (() => { try { return localStorage.getItem('yodla.lastReversed') === '1'; } catch { return false; } })());
+  const setRev = (v: boolean) => { setReversed(v); if (!card) try { localStorage.setItem('yodla.lastReversed', v ? '1' : '0'); } catch { /* ignore */ } };
   const noteSize = card ? noteOf(card).length : 1;
   const [busyImg, setBusyImg] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -152,7 +153,7 @@ export function CardEditor() {
         try { const img = await storeImage(await compressImage(file, kind === 'occlusion' ? 1600 : undefined)); setF((s) => ({ ...s, image: img })); setErrs((x) => ({ ...x, image: '' })); } catch { toast(t('pdfError'), 'err'); } finally { setBusyImg(false); e.target.value = ''; }
       }} />
       <div className="card-surface divide-y divide-ink-900/5 rounded-3xl px-4 dark:divide-white/5">
-        {basic && !isCloze && <label className="flex items-center justify-between py-3"><span className="flex items-center gap-2 text-sm font-semibold"><Repeat size={16} className="text-brand-500" />{t('alsoReversed')}</span><Toggle label={t('alsoReversed')} checked={reversed} onChange={setReversed} /></label>}
+        {basic && !isCloze && <label className="flex items-center justify-between py-3"><span className="flex items-center gap-2 text-sm font-semibold"><Repeat size={16} className="text-brand-500" />{t('alsoReversed')}</span><Toggle label={t('alsoReversed')} checked={reversed} onChange={setRev} /></label>}
         <label className="flex items-center justify-between py-3"><span className="flex items-center gap-2 text-sm font-semibold"><AlertTriangle size={16} className="text-rose-500" />{t('markDifficult')}</span><Toggle label={t('markDifficult')} checked={flags.difficult} onChange={(v) => setFlags({ ...flags, difficult: v })} /></label>
         <label className="flex items-center justify-between py-3"><span className="flex items-center gap-2 text-sm font-semibold"><Bookmark size={16} className="text-amber-500" />{t('bookmark')}</span><Toggle label={t('bookmark')} checked={flags.bookmarked} onChange={(v) => setFlags({ ...flags, bookmarked: v })} /></label>
       </div>
