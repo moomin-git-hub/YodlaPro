@@ -92,7 +92,7 @@ export function CardEditor() {
     if (again) { setF(blank); setMasks([]); setFlags({ difficult: false, bookmarked: false }); setEditorKey((k) => k + 1); }
     else nav(`/deck/${deckId}`, { replace: true });
   };
-  const submit = (e: FormEvent) => { e.preventDefault(); save(false); };
+  const submit = (e: FormEvent) => { e.preventDefault(); save(!card); };
 
   return (
     <form onSubmit={submit} noValidate className="space-y-4" onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(!card); } }}>
@@ -172,7 +172,7 @@ export function CardEditor() {
           </>
         ) : (
           <>
-            <Button type="button" variant="secondary" size="lg" block onClick={() => save(true)}>{t('saveAndAdd')}</Button>
+            <Button type="button" variant="secondary" size="lg" block onClick={() => nav(`/deck/${deckId}`, { replace: true })}>{t('done')}</Button>
             <Button type="submit" size="lg" block>{t('save')}</Button>
           </>
         )}

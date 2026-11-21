@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Settings as Cog, Brain, MoreVertical } from 'lucide-react';
 import { AlgorithmSheet } from './DeckSettings';
 import { CardMenu } from '../components/CardMenu';
@@ -7,7 +7,8 @@ import { algoFor, notesOnly, noteRows, type NoteRow } from '../lib/store';
 import { ArrowLeft, Play, Plus, Pencil, Download, Sparkles, Upload, Shuffle, Bookmark, AlertTriangle, CheckSquare, Trash2, RotateCcw, FolderInput, Globe, Dumbbell, Search, X, Inbox } from 'lucide-react';
 import { useData, updateCard, deleteCards, moveCards, resetProgress, updateSettings, deckTree } from '../lib/store';
 import { DeckTree } from '../components/DeckTree';
-import { plainText } from '../lib/rich';
+import { plainText, clozeHtml } from '../lib/rich';
+import { RichView } from '../components/RichEditor';
 import { FolderTree, CornerLeftUp, Repeat } from 'lucide-react';
 import { todayCount } from '../lib/queue';
 import { useT } from '../lib/i18n';
@@ -42,6 +43,7 @@ export function DeckDetail() {
   const [publishing, setPublishing] = useState(false);
   const [algoOpen, setAlgoOpen] = useState(false);
   const [menuCard, setMenuCard] = useState<Card | null>(null);
+  const [viewCard, setViewCard] = useState<Card | null>(null);
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -151,21 +153,22 @@ export function DeckDetail() {
           <Empty icon={<Inbox size={28} />} title={t('emptyDeck')} sub={t('emptyDeckSub')} action={<Button icon={<Plus size={18} />} onClick={() => nav(`/card/new?deck=${deck.id}`)}>{t('addCard')}</Button>} />
         ) : shown.length === 0 ? <p className="py-10 text-center text-sm opacity-50">{t('noResults')}</p> : (
           <ul className="space-y-2">
-            {shown.slice(0, 400).map((r) => <CardRow key={r.card.id} c={r.card} rev={r.rev} sel={sel} toggle={() => toggle(r)} onMenu={() => setMenuCard(r.card)} />)}
+            {shown.slice(0, 400).map((r) => <CardRow key={r.card.id} c={r.card} rev={r.rev} sel={sel} toggle={() => toggle(r)} onOpen={() => setViewCard(r.card)} onMenu={() => setMenuCard(r.card)} />)}
           </ul>
         )}
       </section>
 
       {sel && sel.size > 0 && (
         <div className="fixed inset-x-0 bottom-20 z-40 mx-auto flex max-w-md animate-pop justify-center gap-2 px-4 lg:bottom-6">
-          <div className="flex gap-1 rounded-3xl bg-ink-900 p-2 text-white shadow-2xl dark:bg-white dark:text-ink-900">
-            <Button size="sm" variant="ghost" className="text-inherit" icon={<FolderInput size={16} />} onClick={() => setMoveOpen(true)}>{t('move')}</Button>
-            <Button size="sm" variant="ghost" className="text-inherit" icon={<RotateCcw size={16} />} onClick={async () => { if (await confirmDialog(`${t('resetProgress')} (${ids.length})?`, { ok: t('resetProgress'), cancel: t('cancel') })) { resetProgress(ids); setSel(null); toast(t('saved')); } }}>{t('resetProgress')}</Button>
+          <div className="flex flex-wrap justify-center gap-1 rounded-3xl bg-ink-900 p-2 text-white shadow-2xl ring-1 ring-white/15">
+            <Button size="sm" variant="ghost" className="!text-white hover:!bg-white/10" icon={<FolderInput size={16} />} onClick={() => setMoveOpen(true)}>{t('move')}</Button>
+            <Button size="sm" variant="ghost" className="!text-white hover:!bg-white/10" icon={<RotateCcw size={16} />} onClick={async () => { if (await confirmDialog(`${t('resetProgress')} (${ids.length})?`, { ok: t('resetProgress'), cancel: t('cancel') })) { resetProgress(ids); setSel(null); toast(t('saved')); } }}>{t('resetProgress')}</Button>
             <Button size="sm" variant="danger" icon={<Trash2 size={16} />} onClick={async () => { if (await confirmDialog(t('confirmDeleteCards', { n: ids.length }), { danger: true, ok: t('delete'), cancel: t('cancel') })) { deleteCards(ids); setSel(null); toast(t('deleted')); } }}>{t('delete')}</Button>
           </div>
         </div>
       )}
 
+      <CardViewSheet card={viewCard} onClose={() => setViewCard(null)} />
       <AlgorithmSheet deck={deck} open={algoOpen} onClose={() => setAlgoOpen(false)} />
       <CardMenu card={menuCard} data={d} open={!!menuCard} onClose={() => setMenuCard(null)} onSelect={() => menuCard && setSel(new Set([menuCard.id, ...cards.filter((x) => x.cardType === 'reverse' && (x.noteId || x.id) === (menuCard.noteId || menuCard.id)).map((x) => x.id)]))} />
       <Sheet open={moveOpen} onClose={() => setMoveOpen(false)} title={t('chooseDeck')}>
@@ -192,7 +195,7 @@ function QuickAction({ icon, label, onClick }: { icon: React.ReactNode; label: s
   return <button onClick={onClick} className="card-surface flex flex-col items-center gap-1.5 rounded-3xl py-3.5 text-xs font-bold transition active:scale-95"><span className="text-brand-500 dark:text-brand-300">{icon}</span>{label}</button>;
 }
 
-function CardRow({ c, rev, sel, toggle, onMenu }: { c: Card; rev?: Card; sel: Set<string> | null; toggle: () => void; onMenu: () => void }) {
+function CardRow({ c, rev, sel, toggle, onOpen, onMenu }: { c: Card; rev?: Card; sel: Set<string> | null; toggle: () => void; onOpen: () => void; onMenu: () => void }) {
   const { t } = useT();
   const status = c.status === 'new' ? ['newCards', 'bg-sky-500'] : isMastered(c) ? ['mastered', 'bg-emerald-500'] : ['learning', 'bg-amber-500'];
   const inner = (
@@ -212,7 +215,7 @@ function CardRow({ c, rev, sel, toggle, onMenu }: { c: Card; rev?: Card; sel: Se
   return (
     <li className="card-surface flex items-center gap-1 rounded-2xl pr-1">
       {sel ? <button onClick={toggle} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">{inner}</button>
-        : <Link to={`/card/${c.id}/edit`} className="flex min-w-0 flex-1 items-center gap-3 p-3">{inner}</Link>}
+        : <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">{inner}</button>}
       {!sel && (
         <>
           <IconButton label={c.bookmarked ? t('removeBookmark') : t('bookmark')} onClick={() => updateCard(c.id, { bookmarked: !c.bookmarked })} className={c.bookmarked ? 'text-amber-500 dark:text-amber-400' : 'opacity-40'}><Bookmark size={18} className={c.bookmarked ? 'fill-current' : ''} /></IconButton>
@@ -221,5 +224,32 @@ function CardRow({ c, rev, sel, toggle, onMenu }: { c: Card; rev?: Card; sel: Se
         </>
       )}
     </li>
+  );
+}
+
+function CardViewSheet({ card, onClose }: { card: Card | null; onClose: () => void }) {
+  const { t } = useT();
+  const nav = useNavigate();
+  const [shown, setShown] = useState(false);
+  useEffect(() => setShown(false), [card?.id]);
+  if (!card) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
+  const rev = card.cardType === 'reverse';
+  const cloze = card.cardType === 'cloze';
+  const idx = (() => { try { return JSON.parse(card.extra || '{}').c || 1; } catch { return 1; } })();
+  const q = cloze ? clozeHtml(card.front, idx, shown) : rev ? card.back : card.front;
+  const a = cloze ? '' : rev ? card.front : card.back;
+  return (
+    <Sheet open onClose={onClose} title={t('preview')}>
+      <div className="space-y-4">
+        <div className="rounded-2xl bg-ink-900/[.04] p-4 dark:bg-white/5"><RichView html={q} className="text-[22px] font-extrabold leading-snug" /></div>
+        {card.image && <img src={card.image} alt="" className="max-h-56 w-full rounded-2xl object-contain" />}
+        {!cloze && (shown ? <div className="rounded-2xl bg-brand-500/10 p-4"><RichView html={a} className="text-[20px] font-bold text-brand-600 dark:text-brand-300" /></div>
+          : <Button variant="secondary" block onClick={() => setShown(true)}>{t('tapToShow')}</Button>)}
+        {cloze && !shown && <Button variant="secondary" block onClick={() => setShown(true)}>{t('tapToShow')}</Button>}
+        {shown && card.example && <div><p className="mb-1 text-xs font-bold uppercase opacity-50">{t('example')}</p><RichView html={card.example} className="text-sm" /></div>}
+        {shown && card.explanation && <div><p className="mb-1 text-xs font-bold uppercase opacity-50">{t('explanation')}</p><RichView html={card.explanation} className="text-sm" /></div>}
+        <Button block size="lg" icon={<Pencil size={18} />} onClick={() => { const id = card.id; onClose(); nav(`/card/${id}/edit`); }}>{t('edit')}</Button>
+      </div>
+    </Sheet>
   );
 }
